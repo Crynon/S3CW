@@ -16,10 +16,10 @@ def main():
         program += " < "
 
     #STEP 1 - Buffer Discovery
-    bufferLength = bufferDiscovery(BRUTE_FORCE, program)
+    bufferLength = bufferDiscovery(BINARY_SEARCH, program)
     print(bufferLength)
     #STEP 2 - Create ROP Chain
-    #FILE ROPchain = createROPchain(COMMAND);
+    ROPchain = createROPchain(COMMAND)
     #STEP 3a - Verify success with known .data
 
     #STEP 3b - Verify success with random .data
@@ -32,6 +32,7 @@ def bufferDiscovery(mode, program):
     if(mode == BINARY_SEARCH):
         #Do Something
         print("Binary Search")
+        return binarySearch(program)
     if(mode == ANALYSIS):
         #Do Something
         print("Analysis")
@@ -46,8 +47,42 @@ def bruteForce(program):
         output = run(program, fileLoc)
         print("Running program with buffer of " + str(i) + ", returned code " + str(output))
         if output == 35584:
-            return i
+            return i - 1 + 4
     return -1
+
+def binarySearch(program):
+    fileLoc = "payload"
+    test = open(fileLoc, "w")
+    payload = ""
+    found = False
+    Low = 1
+    High = 1
+    output = 0
+
+    #Work Up to find a SEG FAULT
+    while output != 35584:
+        payload = 'A' * High
+        writePayload(test, payload)
+        output = run(program, fileLoc)
+        print("Running program with buffer of " + str(i) + ", returned code " + str(output))
+        High = High * 2
+
+    #Work Down to earliest SEG FAULT
+    while found == False:
+        payload = 'A' * ((High + Low) / 2)
+        writePayload(test, payload)
+        output = run(program, fileLoc)
+        print("Running program with buffer of " + str(i) + ", returned code " + str(output))
+        if output == 35584:
+            High = ((High + Low) / 2)
+        if output == 0:
+            Low = ((High + Low) / 2)
+        if High == Low + 1:
+            found = True
+
+    print(High)
+    return High
+
 
 def writePayload(file, string):
     file.seek(0)
@@ -58,6 +93,12 @@ def run(program, payload):
     return os.system(command)
 
 def createROPchain(command):
+    #Find ROP gadgets
+    #Write command as gadgets
+    #Verify gadgets are present
+    #Rewrite for missing gadgets
+    #Chain gadgets
+    #Write the payload
     return None
 
 if __name__ == "main":
