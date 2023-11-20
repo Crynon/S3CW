@@ -38,11 +38,11 @@ int bufferDiscovery(int mode, char *program){
     }
     if(mode == BINARY_SEARCH){
         //Binary search brute force
-        return binarySearch();
+        //return binarySearch();
     }
     if(mode == ANALYSIS){
         //Code analysis
-        return codeAnalysis();
+        //return codeAnalysis();
     }
 }
 
