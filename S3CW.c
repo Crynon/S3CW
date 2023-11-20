@@ -4,7 +4,7 @@
 int writePayload(FILE* file, char* string);
 int run(char *program, char *payloadFileName);
 
-int bufferDiscovery(int mode);
+int bufferDiscovery(int mode, char *program);
 int bruteForce(char *program);
 int binarySearch();
 int codeAnalysis();
@@ -71,7 +71,7 @@ int writePayload(FILE *file, char *string){
 
 int run(char *program, char *payloadFileName){
     //Run program with payload
-    char * command[100];
+    char command[100];
     strcpy(command, program);
     strcat(command, payloadFileName);
     return system(command);
