@@ -75,14 +75,13 @@ def binarySearch(program):
         output = run(program, fileLoc)
         print("Running program with buffer of " + str(int((High + Low) / 2)) + ", returned code " + str(output))
         if output == 35584:
-            High = ((High + Low) / 2)
+            High = int((High + Low) / 2)
         if output == 0:
-            Low = ((High + Low) / 2)
+            Low = int((High + Low) / 2)
         if High == Low + 1:
             found = True
 
-    print(High)
-    return High
+    return High + 4
 
 
 def writePayload(file, string):
