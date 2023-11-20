@@ -52,7 +52,6 @@ def bruteForce(program):
 
 def binarySearch(program):
     fileLoc = "payload"
-    test = open(fileLoc, "w")
     payload = ""
     found = False
     Low = 1
@@ -62,17 +61,19 @@ def binarySearch(program):
     #Work Up to find a SEG FAULT
     while output != 35584:
         payload = 'A' * High
-        writePayload(test, payload)
+        writePayload(fileLoc, payload)
         output = run(program, fileLoc)
-        print("Running program with buffer of " + str(i) + ", returned code " + str(output))
+        print("Running program with buffer of " + str(High) + ", returned code " + str(output))
         High = High * 2
+        if(High > 512):
+            quit() #Exit out if buffer is very large
 
     #Work Down to earliest SEG FAULT
     while found == False:
-        payload = 'A' * ((High + Low) / 2)
-        writePayload(test, payload)
+        payload = 'A' * int((High + Low) / 2)
+        writePayload(fileLoc, payload)
         output = run(program, fileLoc)
-        print("Running program with buffer of " + str(i) + ", returned code " + str(output))
+        print("Running program with buffer of " + str(int((High + Low) / 2)) + ", returned code " + str(output))
         if output == 35584:
             High = ((High + Low) / 2)
         if output == 0:
@@ -85,8 +86,8 @@ def binarySearch(program):
 
 
 def writePayload(file, string):
-    file.seek(0)
-    file.write(string)
+    f = open(file, "w")
+    f.write(string)
 
 def run(program, payload):
     command = program + payload
