@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 int writePayload(FILE* file, char* string);
 int run(char *program, char *payloadFileName);
