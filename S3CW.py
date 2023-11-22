@@ -20,7 +20,7 @@ def main():
     bufferLength = bufferDiscovery(BINARY_SEARCH, program)
     print(bufferLength)
     #STEP 2 - Create ROP Chain
-    ROPchain = createROPchain(COMMAND)
+    ROPchain = createROPchain(COMMAND, bufferLength)
     #STEP 3a - Verify success with known .data
 
     #STEP 3b - Verify success with random .data

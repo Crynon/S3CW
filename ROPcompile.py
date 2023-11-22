@@ -7,14 +7,14 @@ gadgetdictionary = {
 def LoadGadgetDictionary(filename):
     file = open(filename, "r")
     for line in file:
-        memoryLocation = line[0:9]
+        memoryLocation = line[0:10]
         gadget = line[13:]
         gadgetdictionary.update({gadget : memoryLocation})
 
 def CreateROPChain(command, bufflength, gadgetfile):
     LoadGadgetDictionary(gadgetfile)
 
-    if(command[0:5] == "execve"):
+    if(command[0:6] == "execve"):
         print(command[7:].split(',').strip())
         return execve(command[7:].split(',').strip(), bufflength)
     return None
