@@ -76,38 +76,39 @@ def CreateROPChain(command, bufflength, gadgetfile, bits):
         return execve([eval(x.strip()) for x in command[7:-1].split(',')], bufflength)
     return None
 
+def SplitListOnData(Gadgets):
+    datavaluelocations = [idx + 1 for idx, val in enumerate(Gadgets) if type(val) is bytes]
+    sections = [Gadgets[i:j] for i, j in zip([0] + datavaluelocations, datavaluelocations + ([len(Gadgets)] if datavaluelocations[-1] != len(Gadgets) else []))]
+    return sections
+
 
 def WriteAsChain(Gadgets, bufflength):
     chain = b'A' * bufflength
 
-    finished = False
-    index = 0
-    while finished == False:
-        if type(Gadgets[index]) is bytes:
-            chain += Gadgets[index]
-            index += 1
-            continue
-        if type(Gadgets[index]) is int:
-            chain += pack(PACK_TYPE, Gadgets[index])
-            index += 1
-            continue
-        if Gadgets[index] == SYSCALL:
-            chain += pack(PACK_TYPE, A2R(SYSCALL))
-            finished = True
-            continue
+    sections = SplitListOnData(Gadgets)
+    print(sections)
+    for section in sections:
+        sectionender = section.pop()
+        if sectionender == SYSCALL:
+            sectionender = pack(PACK_TYPE, A2R(SYSCALL))
 
-
-        if type(Gadgets[index]) is str:
-            found = False
-            count = 1
-            while found == False and count < 5:
-                g = " ; ".join(Gadgets[index:index+count-1])
-                if g + " ; ret" in gadgetdictionary:
-                    chain += pack(PACK_TYPE, A2R(g + " ; ret"))
-                    found = True
-                    continue
-                count += 1
-            index += 1
+        count = len(section)
+        idx = 0
+        while idx < len(section) and count > 0:
+            if type(section[idx]) is int:
+                chain += pack(PACK_TYPE, section[idx])
+                print("adding address: <" + str(section[idx]) + ">")
+                idx += 1
+                count = len(section) - idx
+            g = " ; ".join([str(x) for x in section[idx:idx+count]])
+            if g + " ; ret" in gadgetdictionary:
+                chain += pack(PACK_TYPE, A2R(g + " ; ret"))
+                print("adding gadget: <" + g + " ; ret>")
+                idx += count
+                count = len(section) - idx
+                continue
+            count -= 1
+        chain += sectionender  
 
     return chain
 
