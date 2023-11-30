@@ -156,27 +156,50 @@ def createGoal(shellcode):
     run(goal, shellcode)
     return goal
 
-def findRegistersForDataWrite(Gadgets):
-    #find all registers which can be used as pointers to data in order to write
-    accumulator = False
-    for g in Gadgets:
-        if g == "mov dword ptr [eax]":
-            accumulator = True
+def getWriterRegisters(gadget):
+    r1 = gadget[15:18]
+    r2 = gadget[21:24]
+    return r1, r2
 
 def writeExecutionSearch(startstate, endstate, Gadgets):
-    #Find all writing gadgets
+    execution = []
+    success = False
 
+    #Find all writing gadgets
     writers = filter(lambda x: ("mov dword ptr [" in x), Gadgets)
     print(writers)
+
+    #Get Location to write to
+    writeLocation = ".data"
+
+    #Get data to write
+    writeData = endstate.datavalues[-4:]
+
     #Attempt to find executions which set registers for each write gadget
+    for w in writers:
+        locationreg, valuereg = getWriterRegisters(w)
+        setGoal = copy.deepcopy(startstate)
+        setToLoc(setGoal, locationreg, ".data")
+        setToLoc(setGoal, valuereg, writeData)
+        setexec = setExecutionSearch(startstate, setGoal)
+        if len(setexec) > 0:
+            success = True
+            execution = setexec
+            execution += w
+            break
 
     #Add execution which sets registers to desired endstate
-
-    return []
+    #TODO
+    
+    if success == False:
+        return []
+    return execution
 
 def setExecutionSearch(startstate, endstate, Gadgets):
     success = False
     execution = []
+    
+
     if success == False:
         return []
     return execution
@@ -188,25 +211,33 @@ def findExecution(startstate, endstate, Gadgets):
 #shellcode should be a list of assembly instructions as strings
 #gadgets should be a list of gadgets that will be available as strings
 def create(shellcode, gadgets):
+    singulargadgets = filter(lambda x: x.count(';') < 2, gadgets)
+
     #Generate Goal State
     Goal = createGoal(shellcode)
     Goal.printSystem()
+
     #Initialise Simulation
     GadgetSequence = []
     System = SysState()
     SubGoal = SysState()
+
     #Reverse Execution from goal
     execution = []
-        #Load to .data
+
+    #Load to .data
     while Goal.datavalues != System.datavalues:
         SubGoal = copy.deepcopy(System)
         SubGoal.datavalues = Goal.datavalues[:len(System.datavalues)]
-        section = findExecution(System, SubGoal, gadgets)
+        section = findExecution(System, SubGoal, singulargadgets)
         execution.append(section)
         run(System, section)
-        #Load register values
-    execution.append(findExecution(System, Goal, gadgets))
+
+    #Load register values
+    execution.append(findExecution(System, Goal, singulargadgets))
+
     #Return Sequence of Gadgets
+    return execution
 
 if __name__ == "__main__":
     TestSystem = SysState()
@@ -235,5 +266,6 @@ if __name__ == "__main__":
     run(TestSystem, ["inc eax"]*11)
     TestSystem.printSystem()
 
-    print("CREATE TEST")
-    create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, None)
+
+    #print("CREATE TEST")
+    #create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, None)
