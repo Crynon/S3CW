@@ -20,14 +20,14 @@ WORD_TYPE = "dword"
 PACK_TYPE = "<I"
 
 
-def LoadGadgetDictionary(filename):
+def LoadGadgetDictionary(filename, dictionary):
     file = open(filename, "r")
     for line in file:
         vals = line.split(':')
         if len(vals) == 2:
             memoryLocation = vals[0].rstrip()
             gadget = vals[1].lstrip().rstrip('\n')
-            gadgetdictionary.update({gadget : memoryLocation})
+            dictionary.update({gadget : memoryLocation})
 
 def InitValues(bits):
     if bits == 32:
@@ -42,7 +42,7 @@ def InitValues(bits):
 def CreateROPChain(command, bufflength, gadgetfile, bits):
     global WORD_LEN, DATA_ADDRESS, A_REGISTER, ARG_START_REGISTER, ARG_END_REGISTER, STACK_BUILD_REGISTER, EXECVE_VALUE, SYSCALL, WORD_TYPE, PACK_TYPE
     
-    LoadGadgetDictionary(gadgetfile)
+    LoadGadgetDictionary(gadgetfile, gadgetdictionary)
     WORD_LEN, DATA_ADDRESS, A_REGISTER, ARG_START_REGISTER, ARG_END_REGISTER, STACK_BUILD_REGISTER, EXECVE_VALUE, SYSCALL, WORD_TYPE, PACK_TYPE = InitValues(bits)
 
     if command[0:6] == "execve":

