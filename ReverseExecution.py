@@ -163,6 +163,28 @@ def findRegistersForDataWrite(Gadgets):
         if g == "mov dword ptr [eax]":
             accumulator = True
 
+def writeExecutionSearch(startstate, endstate, Gadgets):
+    #Find all writing gadgets
+
+    writers = filter(lambda x: ("mov dword ptr [" in x), Gadgets)
+    print(writers)
+    #Attempt to find executions which set registers for each write gadget
+
+    #Add execution which sets registers to desired endstate
+
+    return []
+
+def setExecutionSearch(startstate, endstate, Gadgets):
+    success = False
+    execution = []
+    if success == False:
+        return []
+    return execution
+
+def findExecution(startstate, endstate, Gadgets):
+    return []
+
+
 #shellcode should be a list of assembly instructions as strings
 #gadgets should be a list of gadgets that will be available as strings
 def create(shellcode, gadgets):
@@ -171,13 +193,19 @@ def create(shellcode, gadgets):
     Goal.printSystem()
     #Initialise Simulation
     GadgetSequence = []
-    InitialState = SysState()
-    System = copy.deepcopy(Goal)
+    System = SysState()
+    SubGoal = SysState()
     #Reverse Execution from goal
+    execution = []
         #Load to .data
-    while System.datavalues != Goal.datavalues:
-        System.datavalues = Goal.datavalues # TODO
+    while Goal.datavalues != System.datavalues:
+        SubGoal = copy.deepcopy(System)
+        SubGoal.datavalues = Goal.datavalues[:len(System.datavalues)]
+        section = findExecution(System, SubGoal, gadgets)
+        execution.append(section)
+        run(System, section)
         #Load register values
+    execution.append(findExecution(System, Goal, gadgets))
     #Return Sequence of Gadgets
 
 if __name__ == "__main__":
