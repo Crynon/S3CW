@@ -1,5 +1,6 @@
 import copy
 from struct import pack
+import re
 
 ACC_NAME = "eax"
 COUNT_NAME = "ecx"
@@ -172,8 +173,8 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
     success = False
 
     #Find all writing gadgets
-    writers = [x for x in Gadgets if "mov dword ptr [" in x]
-    #writers = filter(lambda x: ("mov dword ptr [" in x), Gadgets)
+    writers = [x for x in Gadgets if ((x[:15] == "mov dword ptr [") and (x[15:18] in registers) and (x[18] == "]") and x[24:] == " ; ret")]
+    #print([x for x in Gadgets if (re.match("mov dword ptr \[[a-z]{3}\] ; ret", x) is not None)])
     print("writing gadgets:")
     print(writers)
 
@@ -210,9 +211,29 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
 
 def popcontrol(Gadgets):
     control = [False] * len(registers)
-    print(Gadgets)
+    #print(Gadgets)
     for i, r in enumerate(registers):
         if ("pop " + r + " ; ret") in Gadgets:
+            control[i] = True
+    return control
+
+def movcontrol(Gadgets):
+    control = [""] * len(registers)
+    for i, r in enumerate(registers):
+        if("mov " + r + ", eax ; ret") in Gadgets:
+            control[i] = "eax"
+        if("mov " + r + ", ebx ; ret") in Gadgets:
+            control[i] = "ebx"
+        if("mov " + r + ", ecx ; ret") in Gadgets:
+            control[i] = "ecx"
+        if("mov " + r + ", edx ; ret") in Gadgets:
+            control[i] = "edx"
+    return control
+
+def xorcontrol(Gadgets):
+    control = [False] * len(registers)
+    for i, r in enumerate(registers):
+        if ("xor " + r + ", " + r + " ; ret" and "inc " + r) in Gadgets:
             control[i] = True
     return control
 
@@ -220,8 +241,23 @@ def setExecutionSearch(startstate, endstate, Gadgets):
     success = False
     execution = []
 
-    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+    movreqs = movcontrol(Gadgets)
     popcontrolled = popcontrol(Gadgets)
+    xorcontrolled = xorcontrol(Gadgets)
+    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+
+    for i in range(len(registersToSet)):
+        if registersToSet[i] == True and popcontrolled[i] == False:
+            print("movreqs")
+            print(movreqs[i])
+    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+
+    for i in range(len(registersToSet)):
+        if registersToSet[i] == True and popcontrolled[i] == False:
+            print("xorcontrol")
+            print(xorcontrolled[i])
+    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+
     print(registersToSet)
     print(popcontrolled)
     if [(x == False or y == True) for x, y in zip(registersToSet, popcontrolled)] == [True] * len(registersToSet):
@@ -246,7 +282,8 @@ def findExecution(startstate, endstate, Gadgets):
 #shellcode should be a list of assembly instructions as strings
 #gadgets should be a list of gadgets that will be available as strings
 def create(shellcode, gadgets):
-    singulargadgets = [x for x in gadgets if x.count(';') < 2]
+    retgadgets = [x for x in gadgets if x[-3:] == "ret"]
+    allowedgadgets = [x for x in retgadgets if x.count(';') < 3]
 
     #Generate Goal State
     Goal = createGoal(shellcode)
@@ -264,7 +301,7 @@ def create(shellcode, gadgets):
     while Goal.datavalues != System.datavalues:
         SubGoal = copy.deepcopy(System)
         SubGoal.datavalues = Goal.datavalues[:len(System.datavalues)+4]
-        section = findExecution(System, SubGoal, singulargadgets)
+        section = findExecution(System, SubGoal, allowedgadgets)
         if len(section) == 0:
             print("Failed to write to data")
             quit()
@@ -277,17 +314,24 @@ def create(shellcode, gadgets):
         System.printSystem()
         
     #Load register values
-    execution.extend(findExecution(System, Goal, singulargadgets))
-    print(execution)
+    regload = findExecution(System, Goal, allowedgadgets)
+    print("regload:")
+    print(regload)
+    execution.extend(regload)
     TestSystem = SysState()
     run(TestSystem, execution)
     TestSystem.printSystem()
+    print(execution)
     #Return Sequence of Gadgets
     return execution
 
 if __name__ == "__main__":
     #gadgets = ["pop edx ; ret", "pop eax ; ret", "mov dword ptr [edx], eax ; ret", "xor eax, eax ; ret", "pop ebx ; ret", "pop ecx ; ret"]
     
+    import ROPcompile
+    dictionary = {}
+    ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
+    gadgets = dictionary.keys()
 
     print("CREATE TEST")
     create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, gadgets)
