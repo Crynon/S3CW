@@ -74,6 +74,8 @@ def generalToBytes(value):
         return value
     if type(value) is int:
         return pack("<I", value)
+    if value is None:
+        return pack("<I", 0)
 
 def writeToData(state, position, value):
     numBytes = len(value)
@@ -110,6 +112,9 @@ def inc(state, r):
 
 def xor(state, d, s):
     #xor d with s and store in d
+    if d == s:
+        setToLoc(state, d, b'\x00\x00\x00\x00')
+        return
     v1 = generalToBytes(getFromLoc(state, d))
     v2 = generalToBytes(getFromLoc(state, s))
     v = bytes(a ^ b for a, b in zip(v1, v2))
@@ -209,11 +214,13 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
         setGoal = copy.deepcopy(startstate)
         setToLoc(setGoal, locationreg, "@ " + writeLocation)
         setToLoc(setGoal, valuereg, writeData)
+        print("Searching for write using: " + w)
         setexec = setExecutionSearch(startstate, setGoal, Gadgets)
         if len(setexec) > 0:
             success = True
             execution = setexec
             execution.append(w)
+            print("Found write using " + w)
             break
 
     #Add execution which sets registers to desired endstate
@@ -249,11 +256,13 @@ def movcontrol(Gadgets):
 def xorcontrol(Gadgets):
     control = [False] * len(registers)
     for i, r in enumerate(registers):
-        if ("xor " + r + ", " + r + " ; ret" and "inc " + r) in Gadgets:
+        if ("xor " + r + ", " + r + " ; ret" in Gadgets) and ("inc " + r + " ; ret" in Gadgets):
+            print("xor control of " + r)
             control[i] = True
     return control
 
 def setExecutionSearch(startstate, endstate, Gadgets):
+    print("setExecutionSearch")
     success = False
     execution = []
 
@@ -270,24 +279,39 @@ def setExecutionSearch(startstate, endstate, Gadgets):
             if registersToSet[i] == True:
                 pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
                 pops.reverse()
+                values = []
+                null = False
+                for reg in pops:
+                    values.append(getFromLoc(endstate, reg))
+                    if type(values[-1]) == bytes and b'\x00' in values[-1]:
+                        null = True
+                if null:
+                    continue                
                 for reg in pops:
                     print(reg)
                     print(getFromLoc(endstate, reg))
                     execution.append(getFromLoc(endstate, reg))
                 execution.append(popcontrolled[i])
-        success = True
+                registersToSet[i] = False
 
+    print(xorcontrolled)
+    print(registersToSet)
     for i in range(len(registersToSet)):
-        if registersToSet[i] == True and popcontrolled[i] == False:
+        if registersToSet[i] == True and xorcontrolled[i] == True:
             print("xorcontrol")
-            print(xorcontrolled[i])
-    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
-
+            print(registers[i])
+            print(getFromLoc(endstate, registers[i]))
+            execution.extend([("inc " + registers[i] + " ; ret")] * int.from_bytes(getFromLoc(endstate, registers[i]), byteorder="little"))
+            execution.append("xor " + registers[i] + ", " + registers[i] + " ; ret")
+            registersToSet[i] = False
+    print(execution)
     for i in range(len(registersToSet)):
-        if registersToSet[i] == True and popcontrolled[i] == False:
+        if registersToSet[i] == True:
             print("movreqs")
             print(movreqs[i])
-    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+            
+    if registersToSet == [False] * len(registersToSet):
+        success = True
 
 
     execution.reverse()

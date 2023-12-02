@@ -54,6 +54,9 @@ def SplitListOnData(Gadgets):
     sections = [Gadgets[i:j] for i, j in zip([0] + datavaluelocations, datavaluelocations + ([len(Gadgets)] if datavaluelocations[-1] != len(Gadgets) else []))]
     return sections
 
+def dataaddressToValue(instruction):
+    return int(instruction.lstrip("@ .dat+") or 0)
+
 def ReplaceMissingGadget(gadget):
     return None
 
@@ -175,6 +178,15 @@ def A2R(instruction):
         return int.from_bytes(instruction, byteorder='little')
     return int(gadgetdictionary[instruction], 0)
 
+def AssemblyToGadget(instruction):
+    #Assembly string to Gadget Address
+    if type(instruction) is bytes:
+        return int.from_bytes(instruction, byteorder='little')
+    if type(instruction) is int:
+        return instruction
+    if instruction[0] == '@':
+        return dataaddressToValue(instruction)
+    return int(gadgetdictionary[instruction],0)
 
 if __name__ == "__main__":
     dummydict = {

