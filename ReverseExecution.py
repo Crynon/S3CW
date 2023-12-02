@@ -134,7 +134,13 @@ def transition(state, instruction):
         endpop(state, instruction)
         return state
     
-    parts = [x.strip() for x in instruction.split(",")]
+    retless = instruction
+    if retless[-6:] == " ; ret":
+        retless = retless[:-6]
+    insts = [x.strip() for x in retless.split(";")]
+    for i in insts[:-1]:
+        transition(state, i)
+    parts = [x.strip() for x in insts[-1].split(",")]
     command = parts[0]
     if len(parts) == 2:
         operand = parts[1]
@@ -157,6 +163,12 @@ def run(state, shellcode):
     print(shellcode)
     for instruction in shellcode:
         transition(state, instruction)
+
+def addRet(gadget):
+    return gadget.rstrip().append(" ; ret")
+
+def removeRet(gadget):
+    return gadget[:-5]
 
 def createGoal(shellcode):
     goal = SysState()
@@ -199,7 +211,7 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
         if len(setexec) > 0:
             success = True
             execution = setexec
-            execution.append(w.split(';')[0].rstrip())
+            execution.append(w)
             break
 
     #Add execution which sets registers to desired endstate
@@ -210,11 +222,13 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
     return execution
 
 def popcontrol(Gadgets):
-    control = [False] * len(registers)
+    control = [""] * len(registers)
     #print(Gadgets)
+    search = "|".join(Gadgets)
     for i, r in enumerate(registers):
-        if ("pop " + r + " ; ret") in Gadgets:
-            control[i] = True
+        s = re.search("(pop [a-z]{3} ; )*(pop "+r+" ; )(pop [a-z]{3} ; )*ret", search)
+        if type(s) is not None:
+            control[i] = s.group()
     return control
 
 def movcontrol(Gadgets):
@@ -260,12 +274,16 @@ def setExecutionSearch(startstate, endstate, Gadgets):
 
     print(registersToSet)
     print(popcontrolled)
-    if [(x == False or y == True) for x, y in zip(registersToSet, popcontrolled)] == [True] * len(registersToSet):
+    if [(x == False or y != "") for x, y in zip(registersToSet, popcontrolled)] == [True] * len(registersToSet):
         print(registersToSet)
         for i, r in enumerate(registers):
             if registersToSet[i] == True:
-                execution.append("pop " + r)
-                execution.append(getFromLoc(endstate, r))
+                execution.append(popcontrolled[i])
+                pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
+                for reg in pops:
+                    print(reg)
+                    print(getFromLoc(endstate, reg))
+                    execution.append(getFromLoc(endstate, reg))
         success = True
     print(execution)
     if success == False:
@@ -327,7 +345,7 @@ def create(shellcode, gadgets):
 
 if __name__ == "__main__":
     #gadgets = ["pop edx ; ret", "pop eax ; ret", "mov dword ptr [edx], eax ; ret", "xor eax, eax ; ret", "pop ebx ; ret", "pop ecx ; ret"]
-    
+
     import ROPcompile
     dictionary = {}
     ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
