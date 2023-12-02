@@ -168,7 +168,9 @@ def addRet(gadget):
     return gadget.rstrip().append(" ; ret")
 
 def removeRet(gadget):
-    return gadget[:-5]
+    if gadget[-5:] == "; ret":
+        return gadget[:-5]
+    return gadget
 
 def createGoal(shellcode):
     goal = SysState()
@@ -260,11 +262,20 @@ def setExecutionSearch(startstate, endstate, Gadgets):
     xorcontrolled = xorcontrol(Gadgets)
     registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
 
-    for i in range(len(registersToSet)):
-        if registersToSet[i] == True and popcontrolled[i] == False:
-            print("movreqs")
-            print(movreqs[i])
-    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+    print(registersToSet)
+    print(popcontrolled)
+    if [(x == False or y != "") for x, y in zip(registersToSet, popcontrolled)] == [True] * len(registersToSet):
+        print(registersToSet)
+        for i, r in enumerate(registers):
+            if registersToSet[i] == True:
+                pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
+                pops.reverse()
+                for reg in pops:
+                    print(reg)
+                    print(getFromLoc(endstate, reg))
+                    execution.append(getFromLoc(endstate, reg))
+                execution.append(popcontrolled[i])
+        success = True
 
     for i in range(len(registersToSet)):
         if registersToSet[i] == True and popcontrolled[i] == False:
@@ -272,19 +283,14 @@ def setExecutionSearch(startstate, endstate, Gadgets):
             print(xorcontrolled[i])
     registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
 
-    print(registersToSet)
-    print(popcontrolled)
-    if [(x == False or y != "") for x, y in zip(registersToSet, popcontrolled)] == [True] * len(registersToSet):
-        print(registersToSet)
-        for i, r in enumerate(registers):
-            if registersToSet[i] == True:
-                execution.append(popcontrolled[i])
-                pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
-                for reg in pops:
-                    print(reg)
-                    print(getFromLoc(endstate, reg))
-                    execution.append(getFromLoc(endstate, reg))
-        success = True
+    for i in range(len(registersToSet)):
+        if registersToSet[i] == True and popcontrolled[i] == False:
+            print("movreqs")
+            print(movreqs[i])
+    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+
+
+    execution.reverse()
     print(execution)
     if success == False:
         return []
