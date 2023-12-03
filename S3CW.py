@@ -1,6 +1,6 @@
 import os
 import ROPcompile
-import ReverseExecution
+import ReverseExecutionASLR as RevExe
 
 BINARY_BITS = 32
 
@@ -158,7 +158,7 @@ def makeROPchain(shellcode, bufflength):
     dictionary = {}
     ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
     gadgets = dictionary.keys()
-    payload = ReverseExecution.create(shellcode, gadgets)
+    payload = RevExe.create(shellcode, gadgets)
     #for i, _ in enumerate(payload):
         #if type(payload[i]) is bytes:
             #payload[i] = payload[i]
