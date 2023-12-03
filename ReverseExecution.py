@@ -134,7 +134,6 @@ def endpop(state, v):
     state.popped.pop(0)
 
 def transition(state, instruction):
-    print(instruction)
     if type(instruction) is bytes:
         endpop(state, instruction)
         return state
@@ -192,8 +191,7 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
     success = False
 
     #Find all writing gadgets
-    writers = [x for x in Gadgets if ((x[:15] == "mov dword ptr [") and (x[15:18] in registers) and (x[18] == "]") and x[24:] == " ; ret")]
-    #print([x for x in Gadgets if (re.match("mov dword ptr \[[a-z]{3}\] ; ret", x) is not None)])
+    writers = [x for x in Gadgets if (re.match("mov dword ptr \[[a-z]{3}\], [a-z]{3} ; ret", x) is not None)]
     print("writing gadgets:")
     print(writers)
 
@@ -232,7 +230,6 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
 
 def popcontrol(Gadgets):
     control = [""] * len(registers)
-    #print(Gadgets)
     search = "|".join(Gadgets)
     for i, r in enumerate(registers):
         s = re.search("(pop [a-z]{3} ; )*(pop "+r+" ; )(pop [a-z]{3} ; )*ret", search)
@@ -355,21 +352,17 @@ def create(shellcode, gadgets):
             quit()
         else:
             print("Added data write")
-        System.printSystem()
         execution.extend(section)
-        print(section)
         run(System, section)
-        System.printSystem()
         
     #Load register values
     regload = findExecution(System, Goal, allowedgadgets)
-    print("regload:")
-    print(regload)
     execution.extend(regload)
     TestSystem = SysState()
     run(TestSystem, execution)
     TestSystem.printSystem()
     print(execution)
+    execution.append("int 0x80")
     #Return Sequence of Gadgets
     return execution
 

