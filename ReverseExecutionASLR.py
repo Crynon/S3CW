@@ -25,6 +25,7 @@ class SysState:
     datavalues = b''
 
     popped = []
+    pushed = []
 
     def __init__(self):
         print("Creating New SysState Object...")
@@ -136,7 +137,14 @@ def mov(state, d, s):
 
 def pop(state, r):
     #pop register r
-    state.popped.append(r)
+    if len(state.pushed) > 0:
+        setToLoc(state, r, state.pushed.pop(0))
+    else:
+        state.popped.append(r)
+
+def push(state, r):
+    #push value from r
+    state.pushed.append(getFromLoc(state, r))
 
 def endpop(state, v):
     #set popped register to v then unpop register
@@ -166,6 +174,8 @@ def transition(state, instruction):
         mov(state, command[4:], operand)
     if command[0:3] == "pop":
         pop(state, command[4:])
+    if command[0:4] == "push":
+        push(state, command[5:])
     if command[0:1] == "@":
         endpop(state, command)
     if command[0:4] == "xchg":
@@ -229,10 +239,10 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
     for w in writers:
         locationreg, valuereg = getWriterRegisters(w)
         setGoal = copy.deepcopy(startstate)
-        setToLoc(setGoal, locationreg, "@ " + writeLocation)
-        setToLoc(setGoal, valuereg, writeData)
         setToLoc(setGoal, "edx", getFromLoc(setStart, "edx"))
         setToLoc(setGoal, "ebp", getFromLoc(setStart, "ebp"))
+        setToLoc(setGoal, locationreg, "@ " + writeLocation)
+        setToLoc(setGoal, valuereg, writeData)
         print("Searching for write using: " + w)
         setexec = setExecutionSearch(setStart, setGoal, Gadgets)
         if len(setexec) > 0:
@@ -261,17 +271,21 @@ def popcontrol(Gadgets):
             control[i] = s.group()
     return control
 
-def movcontrol(Gadgets):
-    control = [""] * len(registers)
+def fromcontrol(Gadgets, popcontrolled):
+    control = [[], [], [], [], [], [], [], []]
+    for i, _ in enumerate(registers):
+        if popcontrolled[i]:
+            for r in registers:
+                if "push " + r + " ; ret":
+                    control[i].append(r)
+
+    return control
+
+def tocontrol(Gadgets):
+    control = [[]] * len(registers)
     for i, r in enumerate(registers):
-        if("mov " + r + ", eax ; ret") in Gadgets:
-            control[i] = "eax"
-        if("mov " + r + ", ebx ; ret") in Gadgets:
-            control[i] = "ebx"
-        if("mov " + r + ", ecx ; ret") in Gadgets:
-            control[i] = "ecx"
-        if("mov " + r + ", edx ; ret") in Gadgets:
-            control[i] = "edx"
+        if "push " + r + " ; ret":
+            control[i] = popcontrol(Gadgets)
     return control
 
 def xorcontrol(Gadgets):
@@ -284,6 +298,15 @@ def xorcontrol(Gadgets):
 
 def setExecutionSearch(startstate, endstate, Gadgets):
     print("setExecutionSearch")
+    print("SYSTEM STATE")
+    print("-----------------------")
+    startstate.printSystem()
+    print("-----------------------")
+    print("")
+    print("GOAL STATE")
+    print("-----------------------")
+    endstate.printSystem()
+    print("-----------------------")
     execution = []
     success = False
     registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
@@ -322,8 +345,24 @@ def setExecutionSearch(startstate, endstate, Gadgets):
             execution.append("xor " + registers[i] + ", " + registers[i] + " ; ret")
             registersToSet[i] = False
 
+    fromcontrolled = fromcontrol(Gadgets, popcontrolled)
+    savedreg = registersToSet
+    while True:
+        for i, r in enumerate(registersToSet):
+            if r and type(getFromLoc(endstate, registers[i])) is str:
+                for f in fromcontrolled[i]:
+                    if getFromLoc(startstate, f) == getFromLoc(endstate, registers[i]): #fix this, getFromLoc will not work correctly here
+                        execution.append("pop " + registers[i] + " ; ret")
+                        execution.append("push " + f + " ; ret")
+                        registersToSet[i] = False
+        if savedreg == registersToSet:
+            break
+        
+
     if not any(registersToSet):
         success = True
+    else:
+        print(registersToSet)
     
     execution.reverse()
     print(execution)
@@ -370,10 +409,33 @@ def create(shellcode, gadgets):
         else:
             print("Added data write")
         execution.extend(section)
+        print("SYSTEM STATE")
+        print("-----------------------")
+        System.printSystem()
+        print("-----------------------")
+        print("")
+        print("GOAL STATE")
+        print("-----------------------")
+        SubGoal.printSystem()
+        print("-----------------------")
         run(System, section)
         
     #Load register values
+    print("SYSTEM STATE")
+    print("-----------------------")
+    System.printSystem()
+    print("-----------------------")
+    print("")
+    print("GOAL STATE")
+    print("-----------------------")
+    Goal.printSystem()
+    print("-----------------------")
+
     regload = findExecution(System, Goal, allowedgadgets)
+    print(regload)
+    if len(regload) == 0:
+        print("failed to load final register values")
+        quit()
     execution.extend(regload)
     TestSystem = SysState()
     TestSystem.spoint = "@ .data"
