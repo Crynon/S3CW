@@ -24,6 +24,13 @@ def getWriterRegisters(gadget):
     source = gadget[21:24]
     return dest, source
 
+def regToSet(startstate, endstate):
+    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+    for i, r in enumerate(registers):
+        if getFromLoc(endstate, r) == None:
+            registersToSet[i] = False
+    return registersToSet
+
 def writeExecutionSearch(startstate, endstate, Gadgets):
     execution = []
     success = False
@@ -51,7 +58,7 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
         setToLoc(setGoal, locationreg, "@ " + writeLocation)
         setToLoc(setGoal, valuereg, writeData)
         print("Searching for write using: " + w)
-        setexec = setExecutionSearch(startstate, setGoal, Gadgets)
+        setexec = findExecution(startstate, setGoal, Gadgets)
         if len(setexec) > 0:
             success = True
             execution = setexec
@@ -94,177 +101,58 @@ def xorcontrol(Gadgets):
 
 def setExecutionSearch(startstate, endstate, Gadgets):
     print()
-    print("setExecutionSearch")
-    print("SYSTEM STATE")
-    print("-----------------------")
+    print("startstate")
     startstate.printSystem()
-    print("-----------------------")
-    print("")
-    print("GOAL STATE")
-    print("-----------------------")
+    print("endstate")
     endstate.printSystem()
-    print("-----------------------")
-    success = False
+
     execution = []
+    registersToSet = regToSet(startstate, endstate)
 
-    registersToSet = [x != y for x, y in zip(startstate.allRegisters(), endstate.allRegisters())]
+    popcontrolled = popcontrol(Gadgets)
     for i, r in enumerate(registers):
-        if getFromLoc(endstate, r) == None:
-            registersToSet[i] = False
-
-    while True:
-        savedreg = registersToSet
-        print(savedreg)
-        popcontrolled = popcontrol(Gadgets)
-        for i, r in enumerate(registers):
-            if registersToSet[i] == True:
-                pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
-                pops.reverse()
-                values = []
-                null = False
-                for reg in pops:
-                    values.append(getFromLoc(endstate, reg))
-                    if values[-1] is None:
-                        values[-1] = 0
-                    if type(values[-1]) == bytes and b'\x00' in values[-1]:
-                        null = True
-                if null:
-                    continue                
-                for reg in pops:
-                    execution.append(getFromLoc(endstate, reg))
-                execution.append(popcontrolled[i])
-                registersToSet[i] = False
-                #break out of loop if no progress is made
-        if savedreg == registersToSet:
-            break
-
+        if registersToSet[i] == True:
+            pops = [x[-4:-1] for x in removeRet(popcontrolled[i]).split(";")]
+            values = []
+            null = False
+            for reg in pops:
+                values.append(getFromLoc(endstate, reg))
+                if values[-1] is None:
+                    values[-1] = b'AAAA'
+                if type(values[-1]) == bytes and b'\x00' in values[-1]:
+                    null = True
+            if null:
+                continue             
+            execution.append(popcontrolled[i])   
+            for reg in pops:
+                execution.append(values[pops.index(reg)])
+                setToLoc(endstate, reg, getFromLoc(startstate, reg))
+            print("here")
+            print(execution)
+            return execution
+        
     xorcontrolled = xorcontrol(Gadgets)
-    print(xorcontrolled)
-    print(registersToSet)
     for i in range(len(registersToSet)):
         if registersToSet[i] == True and xorcontrolled[i] == True:
             execution.extend([("inc " + registers[i] + " ; ret")] * int.from_bytes(getFromLoc(endstate, registers[i]), byteorder="little"))
             execution.append("xor " + registers[i] + ", " + registers[i] + " ; ret")
-            registersToSet[i] = False
-
-    fromcontrolled = movcontrol(Gadgets, popcontrolled)
-    while True:
-        savedreg = registersToSet
-        print(savedreg)
-        #iterate through registers which need to be set to a string value
-        for i, r in enumerate(registersToSet):
-            if r and type(getFromLoc(endstate, registers[i])) is str:
-                print(registers[i] + " can receive value from:")
-                print(fromcontrolled[i])
-                
-                #look for exact value in register
-                for f in fromcontrolled[i]:
-                    if getFromLoc(startstate, f) == getFromLoc(endstate, registers[i]):
-                        print("found value in " + f)
-                        execution.append("mov " + registers[i] + ", " + f + " ; ret")                             
-                        registersToSet[i] = False
-                #break early if exact value found
-                if registersToSet[i] == False:
-                    continue
-
-                #check if value already is an address
-                if type(getFromLoc(startstate, registers[i])) is str:
-                    #address currently stored
-                    addressplus = dataaddressToValue(getFromLoc(startstate, registers[i]))
-                    #address needed
-                    goaladdress = dataaddressToValue(getFromLoc(endstate, registers[i]))
-
-                    #check if decrement gadget available if needed
-                    if addressplus > goaladdress:
-                        if "dec " + registers[i] + " ; ret" in Gadgets:
-                            #add required number of decrements to execution
-                            execution.extend(["dec " + registers[i] + " ; ret"] * (addressplus - goaladdress))  
-                            registersToSet[i] = False
-
-                    #check if increment gadget available if needed
-                    if addressplus < goaladdress:
-                        if "inc " + registers[i] + " ; ret" in Gadgets:
-                            #add required number of increments to execution
-                            execution.extend(["inc " + registers[i] + " ; ret"] * (goaladdress - addressplus))
-                            registersToSet[i] = False
-                    
-                    if registersToSet[i] == False:
-                        continue
-
-
-                #iterate through all registers that values can be taken from
-                for f in fromcontrolled[i]:
-                    print(f)
-                    print(type(getFromLoc(startstate, f)) is not str)
-                    #break if value in register is not an address
-                    if type(getFromLoc(startstate, f)) is not str:
-                        continue
-
-                    #address currently stored in source register
-                    addressplus = dataaddressToValue(getFromLoc(startstate, f))
-                    print(addressplus)
-                    #address needed in destination register
-                    goaladdress = dataaddressToValue(getFromLoc(endstate, registers[i]))
-                    print(goaladdress)
-
-                    #check if decrement gadget available if needed
-                    if addressplus > goaladdress:
-                        if "dec " + registers[i] + " ; ret" in Gadgets:
-                            #add required number of decrements to execution
-                            execution.extend(["dec " + registers[i] + " ; ret"] * (addressplus - goaladdress))  
-                            registersToSet[i] = False
-                        elif "dec " + f + " ; ret" in Gadgets and "inc " + f + " ; ret" in Gadgets:
-                            execution.extend(["inc " + f + " ; ret"] * (addressplus - goaladdress))
-                            execution.append("mov " + registers[i] + ", " + f + " ; ret") 
-                            execution.extend(["dec " + f + " ; ret"] * (addressplus - goaladdress))
-                            registersToSet[i] = False
-                            break
-
-                    #check if increment gadget available if needed
-                    if addressplus < goaladdress:
-                        if "inc " + registers[i] + " ; ret" in Gadgets:
-                            #add required number of increments to execution
-                            execution.extend(["inc " + registers[i] + " ; ret"] * (goaladdress - addressplus))
-                            registersToSet[i] = False
-                        elif "dec " + f + " ; ret" in Gadgets and "inc " + f + " ; ret" in Gadgets:
-                            execution.extend(["dec " + f + " ; ret"] * (goaladdress - addressplus))
-                            execution.append("mov " + registers[i] + ", " + f + " ; ret") 
-                            execution.extend(["inc " + f + " ; ret"] * (goaladdress - addressplus))
-                            registersToSet[i] = False
-                            break
-
-                    #move value from source register if source is not destination
-                    if f != registers[i]:
-                        execution.append("mov " + registers[i] + ", " + f + " ; ret") 
-
-                    if registersToSet[i] == False:
-                        break
-        
-        print(registersToSet)
-        #break out of loop if no progress is made
-        if savedreg == registersToSet:
-            break
-            
-    execution.reverse()
-    if not any(registersToSet):
-        print("found set execution")
-        print(execution)
-        success = True
-    else:
-        print("failed to find set execution")
-        print("best attempt")
-        print(execution)
-        print(registersToSet)
-        
-    if success == False:
-        return []
-    return execution
+            setToLoc(endstate, registers[i], None)
+            return execution
 
 def findExecution(startstate, endstate, Gadgets):
-    startstate.printSystem()
+    execution = []
     if startstate.datavalues != endstate.datavalues:
         return writeExecutionSearch(startstate, endstate, Gadgets)
-    return setExecutionSearch(startstate, endstate, Gadgets)
+    while sum(regToSet(startstate, endstate)) != 0:
+        print(startstate.allRegisters())
+        print(endstate.allRegisters())
+        section = setExecutionSearch(startstate, endstate, Gadgets)
+        print(section)
+        if section is None:
+            return []
+        section.extend(execution)
+        execution = section
+    return execution
 
 
 #shellcode should be a list of assembly instructions as strings
