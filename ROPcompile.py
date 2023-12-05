@@ -196,7 +196,7 @@ def AssemblyToGadget(instruction):
         return dataaddressToValue(instruction)
     return int(gadgetdictionary[instruction],0)
 
-def AssemblyListToGadgets(instructions, bufflength, dictionary):
+def AssemblyListToGadgets(instructions, bufflength, dictionary, offset=0):
     #Assumes guarantee that all instructions appear in dictionary
     chain = b'A' * bufflength
     missing = []
@@ -228,7 +228,7 @@ def AssemblyListToGadgets(instructions, bufflength, dictionary):
             continue
         
         if instruction in dictionary:
-            chain += pack(PACK_TYPE, int(dictionary[instruction],0))
+            chain += pack(PACK_TYPE, int(dictionary[instruction],0) + offset)
             print("adding gadget  : <" + instruction + "> @ " + dictionary[instruction])
             continue 
     print("missing gadgets:")
