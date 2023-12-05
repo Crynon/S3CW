@@ -1,5 +1,4 @@
 from struct import pack
-from ReverseExecution import generalToBytes
 
 NULL = b'\0\0\0\0'
 
@@ -29,6 +28,14 @@ def LoadGadgetDictionary(filename, dictionary):
             memoryLocation = vals[0].rstrip()
             gadget = vals[1].lstrip().rstrip('\n')
             dictionary.update({gadget : memoryLocation})
+
+def generalToBytes(value):
+    if type(value) is bytes:
+        return value
+    if type(value) is int:
+        return pack("<I", value)
+    if value is None:
+        return pack("<I", 0)
 
 def InitValues(bits):
     if bits == 32:
@@ -192,6 +199,7 @@ def AssemblyToGadget(instruction):
 def AssemblyListToGadgets(instructions, bufflength, dictionary):
     #Assumes guarantee that all instructions appear in dictionary
     chain = b'A' * bufflength
+    missing = []
 
     for instruction in instructions:
         if type(instruction) is bytes:
@@ -216,13 +224,15 @@ def AssemblyListToGadgets(instructions, bufflength, dictionary):
 
         if instruction not in dictionary:
             print("missing gadget : <" + str(instruction) + ">")
+            missing.append(str(instruction))
             continue
         
         if instruction in dictionary:
             chain += pack(PACK_TYPE, int(dictionary[instruction],0))
-            print("adding gadget  : <" + instruction + ">")
+            print("adding gadget  : <" + instruction + "> @ " + dictionary[instruction])
             continue 
-
+    print("missing gadgets:")
+    print(missing)
     return chain
 
 if __name__ == "__main__":
