@@ -1,4 +1,5 @@
 from struct import pack
+import sys
 
 NULL = b'\0\0\0\0'
 
@@ -235,17 +236,24 @@ def AssemblyListToGadgets(instructions, bufflength, dictionary, offset=0):
     print(missing)
     return chain
 
+def fileCheck(fileloc):
+    try:
+        f = open(fileloc, "r")
+        f.close()
+    except:
+        print("Could not open file " + fileloc + " for read")
+        quit()
+
 if __name__ == "__main__":
-    dummydict = {
-        "xor eax, eax" : 0x42424242,
-        "inc eax" : 0x43434343,
-        "int 0x80" : 0x44444444,
-        "pop eax" : 0x45454545,
-        "pop ebx" : 0x46464646,
-        "pop ecx" : 0x47474747,
-        "pop edx" : 0x48484848,
-        "@ .data" : 0x49494949,
-        "mov dword ptr [edx], eax" : 0x48484848,
-    }
-    gadgetdictionary.update(dummydict)
-    print(execve("/bin//sh", 44))
+
+    if len(sys.argv) != 3:
+        print("Expected 2 arguments, got " + str(len(sys.argv)-1))
+        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation")
+        quit()
+    fileCheck(sys.argv[1])
+    fileCheck(sys.argv[2])
+
+    dictionary = {}
+    os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
+    shellcode = []
+    payload = create(shellcode, dictionary.keys())

