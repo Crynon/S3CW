@@ -1,5 +1,6 @@
 from struct import pack
 import sys
+import os
 
 NULL = b'\0\0\0\0'
 
@@ -247,8 +248,8 @@ def fileCheck(fileloc):
 if __name__ == "__main__":
 
     if len(sys.argv) != 3:
-        print("Expected 2 arguments, got " + str(len(sys.argv)-1))
-        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation")
+        print("Expected at least 2 arguments, got " + str(len(sys.argv)-1))
+        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation [Offset]")
         quit()
     fileCheck(sys.argv[1])
     fileCheck(sys.argv[2])
@@ -256,4 +257,13 @@ if __name__ == "__main__":
     dictionary = {}
     os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
     shellcode = []
-    payload = create(shellcode, dictionary.keys())
+    shellfile = open(sys.argv[2], "r")
+    for line in shellfile:
+        if(line[0:2] == "b'" and line[-2] == "'"):
+            shellcode.append(eval(str(line).rstrip('\n')))
+        else:
+            shellcode.append(str(line).rstrip('\n'))
+    payload = AssemblyListToGadgets(shellcode, dictionary)
+
+    outfile = open("RopCompOut", "bw")
+    outfile.write(payload)

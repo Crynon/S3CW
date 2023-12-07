@@ -206,7 +206,7 @@ def fileCheck(fileloc):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Expected 2 arguments, got " + str(len(sys.argv)-1))
         print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation")
         quit()
@@ -217,3 +217,8 @@ if __name__ == "__main__":
     os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
     shellcode = []
     payload = create(shellcode, dictionary.keys())
+
+    outfile = open("RevExeOut.txt", "w")
+    for i in payload:
+        outfile.write(i)
+    outfile.close()
