@@ -255,7 +255,7 @@ if __name__ == "__main__":
     fileCheck(sys.argv[2])
 
     dictionary = {}
-    os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
+    os.system("ROPgadget --all --binary " + sys.argv[1] + " > rop.txt")
     LoadGadgetDictionary("rop.txt", dictionary)
     shellcode = []
     shellfile = open(sys.argv[2], "r")
@@ -266,7 +266,7 @@ if __name__ == "__main__":
             shellcode.append(str(line).rstrip('\n'))
     offset = 0
     if len(sys.argv) == 4:
-        offset = int(sys.argv[3])          
+        offset = int(sys.argv[3], 0)          
     payload = AssemblyListToGadgets(shellcode, 0, dictionary, offset)
 
     outfile = open("RopCompOut", "bw")

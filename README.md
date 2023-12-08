@@ -19,6 +19,25 @@ Each module can also be run individually to perform just their specific function
 
 ---
 
+# Reverse Execution
+
+Running this module alone will take a list of assembly instructions and rewrite it using only the gadgets that the system finds available for the given binary.
+
+This module takes 2 required arguments:
+1. The location of the binary that you wish to generate an exploit for
+2. The location of a file containing the shellcode you wish to execute
+
+Example:
+```
+$ python ReverseExecution.py VulnerableBinaryFile exampleshell.txt
+```
+
+The shellcode file must be in the same format as for S3CW.
+
+The module will always output to a file called "RevExeOut.txt" in its directory.
+
+---
+
 # ROPcompile
 
 Running this module alone will take a list of gadgets and output a payload file while contains those gadgets locations as a byte string assuming those gadgets can be found.
@@ -28,18 +47,15 @@ This module takes 2 required arguments and 1 optional argument:
 2. The location of a file containing the gadgets you wish to execute
 3. (OPTIONAL) The offset from the locations of the gadgets in the binary to their location in memory
 
+Example:
+```
+$ python ROPcompile.py VulnerableBinaryFile GadgetList 0xf7a80042
+```
+
 The module will not add any buffer values to the start of the payload when run alone.
 
 The gadget file must be in the same format as for S3CW.
 
----
+The module will always output to a file called "RopCompOut" in its directory.
 
-# Reverse Execution
 
-Running this module alone will take a list of assembly instructions and rewrite it using only the gadgets that the system finds available for the given binary.
-
-This module takes 2 required arguments:
-1. The location of the binary that you wish to generate an exploit for
-2. The location of a file containing the shellcode you wish to execute
-
-The shellcode file must be in the same format as for S3CW.
