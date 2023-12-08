@@ -2,6 +2,7 @@ import copy
 from struct import pack
 from ROPcompile import dataaddressToValue
 from ROPcompile import generalToBytes
+from ROPcompile import LoadGadgetDictionary
 import re
 from Systems import *
 import sys
@@ -190,7 +191,7 @@ def fileCheck(fileloc):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) < 3 or len(sys.argv) > 4:
+    if len(sys.argv) != 3:
         print("Expected 2 arguments, got " + str(len(sys.argv)-1))
         print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation")
         quit()
@@ -199,6 +200,7 @@ if __name__ == "__main__":
 
     dictionary = {}
     os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
+    LoadGadgetDictionary("rop.txt", dictionary)
     shellcode = []
     shellfile = open(sys.argv[2], "r")
     for line in shellfile:
@@ -210,5 +212,5 @@ if __name__ == "__main__":
 
     outfile = open("RevExeOut.txt", "w")
     for i in payload:
-        outfile.write(i)
+        outfile.write(str(i) + "\n")
     outfile.close()

@@ -247,7 +247,7 @@ def fileCheck(fileloc):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
         print("Expected at least 2 arguments, got " + str(len(sys.argv)-1))
         print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation [Offset]")
         quit()
@@ -256,6 +256,7 @@ if __name__ == "__main__":
 
     dictionary = {}
     os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
+    LoadGadgetDictionary("rop.txt", dictionary)
     shellcode = []
     shellfile = open(sys.argv[2], "r")
     for line in shellfile:
@@ -263,7 +264,10 @@ if __name__ == "__main__":
             shellcode.append(eval(str(line).rstrip('\n')))
         else:
             shellcode.append(str(line).rstrip('\n'))
-    payload = AssemblyListToGadgets(shellcode, dictionary)
+    offset = 0
+    if len(sys.argv) == 4:
+        offset = int(sys.argv[3])          
+    payload = AssemblyListToGadgets(shellcode, 0, dictionary, offset)
 
     outfile = open("RopCompOut", "bw")
     outfile.write(payload)

