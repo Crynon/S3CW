@@ -200,6 +200,12 @@ if __name__ == "__main__":
     dictionary = {}
     os.system("ROPgadget --binary " + sys.argv[1] + " > rop.txt")
     shellcode = []
+    shellfile = open(sys.argv[2], "r")
+    for line in shellfile:
+        if(line[0:2] == "b'" and line[-2] == "'"):
+            shellcode.append(eval(str(line).rstrip('\n')))
+        else:
+            shellcode.append(str(line).rstrip('\n'))
     payload = create(shellcode, dictionary.keys())
 
     outfile = open("RevExeOut.txt", "w")
