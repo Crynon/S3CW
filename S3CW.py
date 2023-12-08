@@ -41,7 +41,6 @@ def main(args):
             SHELLCODE.append(eval(str(line).rstrip('\n')))
         else:
             SHELLCODE.append(str(line).rstrip('\n'))
-    print(SHELLCODE)
 
     global BUFFLENGTH
     if len(args) == 4:
@@ -159,7 +158,8 @@ def makeROPchain(shellcode, bufflength):
     gadgets = dictionary.keys()
     payload = RevExe.create(shellcode, gadgets)
     bpayload = ROPcompile.AssemblyListToGadgets(payload, bufflength, dictionary)
-    print(payload)
+    print()
+    print("Payload:")
     print(bpayload)
 
     #Write the payload

@@ -39,19 +39,14 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
 
     #Find all writing gadgets
     writers = [x for x in Gadgets if (re.match("mov dword ptr \[[a-z]{3}\], [a-z]{3} ; ret", x) is not None)]
-    print("writing gadgets:")
-    print(writers)
 
     #Get Location to write to
     writeLocation = ".data"
-    print("write location:")
     if len(startstate.datavalues) != 0:
         writeLocation += " + " + str(len(startstate.datavalues))
-    print(writeLocation)
 
     #Get data to write
     writeData = endstate.datavalues[-4:]
-    print(writeData)
 
     #Attempt to find executions which set registers for each write gadget
     for w in writers:
@@ -59,13 +54,11 @@ def writeExecutionSearch(startstate, endstate, Gadgets):
         setGoal = copy.deepcopy(startstate)
         setToLoc(setGoal, locationreg, "@ " + writeLocation)
         setToLoc(setGoal, valuereg, writeData)
-        print("Searching for write using: " + w)
         setexec = findExecution(startstate, setGoal, Gadgets)
         if len(setexec) > 0:
             success = True
             execution = setexec
             execution.append(w)
-            print("Found write using " + w)
             break
 
     #Add execution which sets registers to desired endstate
@@ -97,16 +90,10 @@ def xorcontrol(Gadgets):
     control = [False] * len(registers)
     for i, r in enumerate(registers):
         if ("xor " + r + ", " + r + " ; ret" in Gadgets) and ("inc " + r + " ; ret" in Gadgets):
-            print("xor control of " + r)
             control[i] = True
     return control
 
 def setExecutionSearch(startstate, endstate, Gadgets):
-    print()
-    print("startstate")
-    startstate.printSystem()
-    print("endstate")
-    endstate.printSystem()
 
     execution = []
     registersToSet = regToSet(startstate, endstate)
@@ -129,8 +116,6 @@ def setExecutionSearch(startstate, endstate, Gadgets):
             for reg in pops:
                 execution.append(values[pops.index(reg)])
                 setToLoc(endstate, reg, getFromLoc(startstate, reg))
-            print("here")
-            print(execution)
             return execution
         
     xorcontrolled = xorcontrol(Gadgets)
@@ -162,6 +147,7 @@ def create(shellcode, gadgets):
 
     #Generate Goal State
     Goal = createGoal(shellcode)
+    print("Goal State:")
     Goal.printSystem()
 
     #Initialise Simulation
@@ -190,10 +176,8 @@ def create(shellcode, gadgets):
     execution.extend(regload)
     TestSystem = SysState()
     run(TestSystem, execution)
-    TestSystem.printSystem()
     execution.append("int 0x80")
     #Return Sequence of Gadgets
-    print(execution)
     return execution
 
 def fileCheck(fileloc):

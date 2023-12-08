@@ -75,7 +75,6 @@ def getFromLoc(state, name):
     #TODO add support for .data
 
 def setToLoc(state, name, value):
-    print("set " + name + " to " + str(value))
     if name == ACC_NAME:
         state.acc = value
     if name == COUNT_NAME:
@@ -174,7 +173,5 @@ def transition(state, instruction):
     return state
 
 def run(state, shellcode):
-    print("running:")
-    print(shellcode)
     for instruction in shellcode:
         transition(state, instruction)
